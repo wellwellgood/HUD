@@ -332,7 +332,7 @@
         }
         // 방법 2: 이전 위치와의 거리/시간으로 계산
         else if (lastPosition) {
-          const timeDiff = (position.timestamp - lastPosition.timestamp) / 1000; // 초
+          const timeDiff = (position.timestamp - lastPosition.timestamp) / 500; // 초
           if (timeDiff > 0.5) {
             const R = 6371000; // 지구 반지름 (m)
             const φ1 = lastPosition.latitude * Math.PI / 180;
