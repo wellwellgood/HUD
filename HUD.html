@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>HUD + Map (Naver)</title>
+<style>
+  html, body { height: 100%; margin: 0; background:#000; color:#0ff; }
+  #app { position:relative; height:100%; }
+  #map { position:absolute; inset:0; }
+  .hud {
+    position:absolute; left:0; right:0; top:0; padding:16px;
+    display:flex; gap:12px; align-items:center; justify-content:space-between;
+    pointer-events:none; font-family:ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .speed { font-size:64px; font-weight:800; letter-spacing:1px; text-shadow:0 0 8px #0ff; }
+  .meta  { font-size:14px; opacity:.9 }
+  .panel {
+    position:absolute; bottom:12px; left:12px; right:12px;
+    display:flex; gap:8px; pointer-events:auto;
+  }
+  .btn {
+    background:#011; color:#0ff; border:1px solid #055; border-radius:8px;
+    padding:10px 14px; font-weight:700; cursor:pointer;
+  }
+  .mirror { transform:scaleX(-1); }
+</style>
+<script src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=k088fbm2t0&submodules=geocoder"></script>
+</head>
+<body>
+<div id="app">
+  <div id="map"></div>
+  <div id="hud" class="hud">
+    <div class="speed" id="speed">--</div>
+    <div class="meta">
+      <div>HDG <span id="heading">--</span>°</div>
+      <div>LAT <span id="lat">--</span> · LNG <span id="lng">--</span></div>
+      <div>ACC <span id="acc">--</span>m · SAT NA</div>
+    </div>
+  </div>
+  <div class="panel">
+    <button class="btn" id="mirrorBtn">미러 모드</button>
+    <button class="btn" id="themeBtn">다크/라이트</button>
+    <button class="btn" id="pauseBtn">일시정지</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  // --- helpers ---
+  const toKmh = v => v == null ? null : Math.max(0, v * 3.6);
+  const hav = (a)=>Math.sin(a/2)**2;
+  const R = 6371000;
+  const dist = (lat1,lon1,lat2,lon2)=>{
+    const φ1=lat1*Math.PI/180, φ2=lat2*Math.PI/180, dφ=(lat2-lat1)*Math.PI/180, dλ=(lon2-lon1)*Math.PI/180;
+    return 2*R*Math.asin(Math.sqrt(hav(dφ)+Math.cos(φ1)*Math.cos(φ2)*hav(dλ)));
+  };
+  const bearing = (lat1,lon1,lat2,lon2)=>{
+    const φ1=lat1*Math.PI/180, φ2=lat2*Math.PI/180, λ1=lon1*Math.PI/180, λ2=lon2*Math.PI/180;
+    const y=Math.sin(λ2-λ1)*Math.cos(φ2);
+    const x=Math.cos(φ1)*Math.sin(φ2)-Math.sin(φ1)*Math.cos(φ2)*Math.cos(λ2-λ1);
+    let θ=Math.atan2(y,x)*180/Math.PI;
+    return (θ+360)%360;
+  };
+  const ema = (alpha) => {
+    let v=null; return x => { v = (v==null)? x : (alpha*x + (1-alpha)*v); return v; };
+  };
+
+  // --- map ---
+  const map = new naver.maps.Map('map', {
+    center: new naver.maps.LatLng(37.5665, 126.9780),
+    zoom: 16,
+    mapDataControl:false,
+    logoControl:false,
+    scaleControl:false,
+    zoomControl:false,
+    draggable:true, // 필요 시 false
+    pinchZoom:true
+  });
+  const me = new naver.maps.Marker({ position: map.getCenter(), map, icon: { content: '🔵', anchor: new naver.maps.Point(10,10) }});
+
+  // UI refs
+  const $speed = document.getElementById('speed');
+  const $heading = document.getElementById('heading');
+  const $lat = document.getElementById('lat');
+  const $lng = document.getElementById('lng');
+  const $acc = document.getElementById('acc');
+  const $app = document.getElementById('app');
+  const hud = document.getElementById('hud');
+
+  // controls
+  document.getElementById('mirrorBtn').onclick = ()=> $app.classList.toggle('mirror');
+  let dark=true;
+  document.getElementById('themeBtn').onclick = ()=>{
+    dark=!dark;
+    document.body.style.background = dark ? '#000' : '#fff';
+    hud.style.color = dark ? '#0ff' : '#005';
+  };
+  let paused=false;
+  document.getElementById('pauseBtn').onclick = ()=>{
+    paused = !paused;
+    document.getElementById('pauseBtn').textContent = paused ? '재개' : '일시정지';
+  };
+
+  // state
+  let last = null;
+  const smoothSpeed = ema(0.35);
+  const smoothHeading = ema(0.25);
+  let compass = null;
+
+  // device orientation (iOS: absolute heading)
+  window.addEventListener('deviceorientation', (e)=>{
+    // iOS webkitCompassHeading, 안 되면 e.alpha 사용
+    const hdg = (e.webkitCompassHeading != null) ? e.webkitCompassHeading : (360 - (e.alpha||0));
+    if (!isNaN(hdg)) compass = (hdg+360)%360;
+  }, true);
+
+  // geolocation stream
+  if (!navigator.geolocation) {
+    alert('Geolocation 미지원');
+    return;
+  }
+  const watchId = navigator.geolocation.watchPosition(onPos, onErr, {
+    enableHighAccuracy:true, maximumAge:0, timeout:10000
+  });
+
+  function onPos(p){
+    if (paused) return;
+    const { latitude, longitude, accuracy, speed: vms } = p.coords;
+    const now = { lat:latitude, lng:longitude, t:p.timestamp };
+    let kmh = toKmh(vms);
+    let hdg = compass;
+
+    if (last){
+      const d = dist(last.lat,last.lng, now.lat, now.lng);
+      const dt = Math.max(0.5, (now.t - last.t)/1000);
+      const v = d/dt; // m/s
+      if (kmh==null || isNaN(kmh)) kmh = toKmh(v);
+      if (hdg==null) hdg = bearing(last.lat,last.lng, now.lat, now.lng);
+    }
+
+    if (kmh!=null) kmh = smoothSpeed(kmh);
+    if (hdg!=null) hdg = smoothHeading(hdg);
+
+    // update map
+    const latlng = new naver.maps.LatLng(now.lat, now.lng);
+    me.setPosition(latlng);
+    map.setCenter(latlng);
+    if (hdg!=null) map.setHeading(hdg); // 회전 HUD 효과
+
+    // update HUD
+    $speed.textContent = kmh!=null ? Math.round(kmh) : '--';
+    $heading.textContent = hdg!=null ? Math.round(hdg) : '--';
+    $lat.textContent = now.lat.toFixed(6);
+    $lng.textContent = now.lng.toFixed(6);
+    $acc.textContent = accuracy!=null ? Math.round(accuracy) : '--';
+
+    last = now;
+  }
+
+  function onErr(err){
+    alert('위치 오류: ' + err.message);
+  }
+
+  // 권한 요청(iOS 13+ 방향 센서)
+  if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    // 사용자가 버튼 눌러야 허용 가능. 첫 터치 이벤트에 묶어 요청하는 것이 안전.
+    window.addEventListener('click', async function once(){
+      window.removeEventListener('click', once);
+      try { await DeviceOrientationEvent.requestPermission(); } catch(e){}
+    });
+  }
+})();
+</script>
+</body>
+</html>
