@@ -1,320 +1,446 @@
 <!doctype html>
 <html lang="ko">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="referrer" content="strict-origin-when-cross-origin">
-<title>HUD + Map (Naver) - Fixed</title>
-<style>
-  html, body { height: 100%; margin: 0; background:#000; color:#0ff; }
-  #app { position:relative; height:100%; }
-  #map { position:absolute; inset:0; }
-  .hud {
-    position:absolute; left:0; right:0; top:0; padding:16px;
-    display:flex; gap:12px; align-items:center; justify-content:space-between;
-    pointer-events:none; font-family:ui-monospace, SFMono-Regular, Menlo, monospace;
-  }
-  .speed { font-size:64px; font-weight:800; letter-spacing:1px; text-shadow:0 0 8px #0ff; }
-  .meta  { font-size:14px; opacity:.9 }
-  .panel {
-    position:absolute; bottom:12px; left:12px; right:12px;
-    display:flex; gap:8px; pointer-events:auto; flex-wrap:wrap;
-  }
-  .btn {
-    background:#011; color:#0ff; border:1px solid #055; border-radius:8px;
-    padding:10px 14px; font-weight:700; cursor:pointer;
-  }
-  .mirror { transform:scaleX(-1); }
-  .debug {
-    position:absolute; top:120px; left:12px; right:12px;
-    background:rgba(0,0,0,0.8); color:#0ff; padding:12px;
-    font-family:monospace; font-size:12px; border:1px solid #055;
-    max-height:200px; overflow-y:auto;
-  }
-  .status {
-    position:absolute; top:50%; left:50%; transform:translate(-50%, -50%);
-    background:rgba(0,0,0,0.9); color:#0ff; padding:20px;
-    border:2px solid #055; border-radius:12px; text-align:center;
-    font-family:monospace;
-  }
-</style>
 
-<!-- 🔥 중요: Naver Maps API를 먼저 로드 -->
-<script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=i6my73bw6a&submodules=geocoder"></script>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>HUD + Map (Naver) - Fixed</title>
+  <style>
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      background: #000;
+      color: #0ff;
+    }
+
+    #app {
+      position: relative;
+      height: 100%;
+    }
+
+    #map {
+      position: absolute;
+      inset: 0;
+    }
+
+    .hud {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      padding: 16px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      pointer-events: none;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .speed {
+      font-size: 64px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      text-shadow: 0 0 8px #0ff;
+    }
+
+    .meta {
+      font-size: 14px;
+      opacity: .9
+    }
+
+    .panel {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      right: 12px;
+      display: flex;
+      gap: 8px;
+      pointer-events: auto;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      background: #011;
+      color: #0ff;
+      border: 1px solid #055;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .mirror {
+      transform: scaleX(-1);
+    }
+
+    .debug {
+      position: absolute;
+      top: 120px;
+      left: 12px;
+      right: 12px;
+      background: rgba(0, 0, 0, 0.8);
+      color: #0ff;
+      padding: 12px;
+      font-family: monospace;
+      font-size: 12px;
+      border: 1px solid #055;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .status {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.9);
+      color: #0ff;
+      padding: 20px;
+      border: 2px solid #055;
+      border-radius: 12px;
+      text-align: center;
+      font-family: monospace;
+      z-index: 1000;
+    }
+  </style>
 </head>
+
 <body>
-<div id="app">
-  <div id="map"></div>
-  <div id="status" class="status">
-    <div style="font-size:24px; margin-bottom:12px;">🗺️</div>
-    <div>지도 로딩 중...</div>
-  </div>
-  <div id="hud" class="hud" style="display:none;">
-    <div class="speed" id="speed">--</div>
-    <div class="meta">
-      <div>HDG <span id="heading">--</span>°</div>
-      <div>LAT <span id="lat">--</span> · LNG <span id="lng">--</span></div>
-      <div>ACC <span id="acc">--</span>m · SAT NA</div>
+  <div id="app">
+    <div id="map"></div>
+    <div id="status" class="status">
+      <div style="font-size:24px; margin-bottom:12px;">🗺️</div>
+      <div>지도 로딩 중...</div>
+    </div>
+    <div id="hud" class="hud" style="display:none;">
+      <div class="speed" id="speed">--</div>
+      <div class="meta">
+        <div>HDG <span id="heading">--</span>°</div>
+        <div>LAT <span id="lat">--</span> · LNG <span id="lng">--</span></div>
+        <div>ACC <span id="acc">--</span>m · SAT NA</div>
+      </div>
+    </div>
+    <div class="debug" id="debug" style="display:none;">
+      <div><strong>디버그 정보:</strong></div>
+      <div id="debugInfo">초기화 중...</div>
+    </div>
+    <div class="panel">
+      <button class="btn" id="mirrorBtn">미러 모드</button>
+      <button class="btn" id="themeBtn">다크/라이트</button>
+      <button class="btn" id="pauseBtn">일시정지</button>
+      <button class="btn" id="debugBtn">디버그 토글</button>
     </div>
   </div>
-  <div class="debug" id="debug" style="display:none;">
-    <div><strong>디버그 정보:</strong></div>
-    <div id="debugInfo">초기화 중...</div>
-  </div>
-  <div class="panel">
-    <button class="btn" id="mirrorBtn">미러 모드</button>
-    <button class="btn" id="themeBtn">다크/라이트</button>
-    <button class="btn" id="pauseBtn">일시정지</button>
-    <button class="btn" id="debugBtn">디버그 토글</button>
-  </div>
-</div>
 
-<!-- 🔥 메인 스크립트는 Naver Maps API 로드 후 실행 -->
-<script>
-(function(){
-  const debugLog = (msg) => {
-    const debugDiv = document.getElementById('debugInfo');
-    if (!debugDiv) return;
-    const time = new Date().toLocaleTimeString();
-    debugDiv.innerHTML += `<div>[${time}] ${msg}</div>`;
-    console.log('[DEBUG]', msg);
-  };
+  <script>
+    (function () {
+      // 🔥 Naver Maps API 동적 로드 함수
+      function loadNaverMapsAPI() {
+        return new Promise((resolve, reject) => {
+          // 이미 로드되어 있으면 즉시 리턴
+          if (window.naver && window.naver.maps) {
+            console.log('[NAVER] API already loaded');
+            resolve();
+            return;
+          }
 
-  const statusDiv = document.getElementById('status');
-  const hudDiv = document.getElementById('hud');
-  const debugDiv = document.getElementById('debug');
+          // 기존 스크립트 태그가 있으면 제거 (중복 로드 방지)
+          const existingScript = document.querySelector('script[src*="oapi.map.naver.com"]');
+          if (existingScript) {
+            console.log('[NAVER] Removing existing script tag');
+            existingScript.remove();
+          }
 
-  // 디버그 토글
-  document.getElementById('debugBtn').onclick = () => {
-    debugDiv.style.display = debugDiv.style.display === 'none' ? 'block' : 'none';
-  };
+          console.log('[NAVER] Loading API...');
+          const script = document.createElement('script');
+          script.type = 'text/javascript';
+          script.src = 'https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=i6my73bw6a&submodules=geocoder';
+          script.async = false; // 순차 로드
 
-  debugLog('=== 초기화 시작 ===');
-  debugLog('현재 URL: ' + window.location.href);
-  debugLog('현재 도메인: ' + window.location.hostname);
-  debugLog('naver 객체 존재: ' + (typeof naver !== 'undefined'));
-  debugLog('naver.maps 존재: ' + (typeof naver !== 'undefined' && typeof naver.maps !== 'undefined'));
+          script.onload = () => {
+            console.log('[NAVER] API loaded successfully');
+            // API 로드 후 약간의 대기 시간
+            setTimeout(() => {
+              if (window.naver && window.naver.maps) {
+                resolve();
+              } else {
+                reject(new Error('API loaded but naver.maps not available'));
+              }
+            }, 100);
+          };
 
-  // Naver Maps API 확인
-  if (typeof naver === 'undefined' || typeof naver.maps === 'undefined') {
-    statusDiv.innerHTML = `
-      <div style="font-size:24px; margin-bottom:12px;">❌</div>
-      <div style="color:#f00; margin-bottom:8px;">Naver Maps API 로드 실패</div>
-      <div style="font-size:12px; opacity:0.8;">
-        클라이언트 ID를 확인하거나<br>
-        로컬 테스트는 http://localhost 또는 http://127.0.0.1을<br>
-        Naver Cloud 콘솔에 등록하세요
+          script.onerror = (e) => {
+            console.error('[NAVER] API load failed', e);
+            reject(new Error('Failed to load Naver Maps API'));
+          };
+
+          document.head.appendChild(script);
+        });
+      }
+
+      // 디버그 로그 함수
+      const debugLog = (msg) => {
+        const debugDiv = document.getElementById('debugInfo');
+        if (!debugDiv) return;
+        const time = new Date().toLocaleTimeString();
+        debugDiv.innerHTML += `<div>[${time}] ${msg}</div>`;
+        console.log('[DEBUG]', msg);
+      };
+
+      const statusDiv = document.getElementById('status');
+      const hudDiv = document.getElementById('hud');
+      const debugDiv = document.getElementById('debug');
+
+      // 디버그 토글
+      document.getElementById('debugBtn').onclick = () => {
+        debugDiv.style.display = debugDiv.style.display === 'none' ? 'block' : 'none';
+      };
+
+      // 🔥 메인 초기화 함수
+      async function init() {
+        debugLog('=== 초기화 시작 ===');
+        debugLog('현재 URL: ' + window.location.href);
+        debugLog('현재 도메인: ' + window.location.hostname);
+
+        // Naver Maps API 로드
+        try {
+          await loadNaverMapsAPI();
+          debugLog('✓ Naver Maps API 로드 완료');
+        } catch (error) {
+          debugLog('❌ API 로드 실패: ' + error.message);
+          statusDiv.innerHTML = `
+        <div style="font-size:24px; margin-bottom:12px;">❌</div>
+        <div style="color:#f00; margin-bottom:8px;">Naver Maps API 로드 실패</div>
+        <div style="font-size:12px; opacity:0.8;">
+          ${error.message}<br><br>
+          클라이언트 ID 확인 또는<br>
+          도메인을 Naver Cloud에 등록하세요
+        </div>
+      `;
+          return;
+        }
+
+        // --- helpers ---
+        const toKmh = v => v == null ? null : Math.max(0, v * 3.6);
+        const hav = (a) => Math.sin(a / 2) ** 2;
+        const R = 6371000;
+        const dist = (lat1, lon1, lat2, lon2) => {
+          const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180, dφ = (lat2 - lat1) * Math.PI / 180, dλ = (lon2 - lon1) * Math.PI / 180;
+          return 2 * R * Math.asin(Math.sqrt(hav(dφ) + Math.cos(φ1) * Math.cos(φ2) * hav(dλ)));
+        };
+        const bearing = (lat1, lon1, lat2, lon2) => {
+          const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180, λ1 = lon1 * Math.PI / 180, λ2 = lon2 * Math.PI / 180;
+          const y = Math.sin(λ2 - λ1) * Math.cos(φ2);
+          const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(λ2 - λ1);
+          let θ = Math.atan2(y, x) * 180 / Math.PI;
+          return (θ + 360) % 360;
+        };
+        const ema = (alpha) => {
+          let v = null; return x => { v = (v == null) ? x : (alpha * x + (1 - alpha) * v); return v; };
+        };
+
+        // --- map 초기화 ---
+        let map, me;
+        try {
+          debugLog('맵 객체 생성 시작...');
+
+          // 맵 컨테이너 초기화
+          const mapDiv = document.getElementById('map');
+          mapDiv.innerHTML = ''; // 기존 내용 제거
+
+          map = new naver.maps.Map('map', {
+            center: new naver.maps.LatLng(37.5665, 126.9780),
+            zoom: 16,
+            mapDataControl: false,
+            logoControl: false,
+            scaleControl: false,
+            zoomControl: false,
+            draggable: true,
+            pinchZoom: true
+          });
+          debugLog('✓ 맵 객체 생성 성공');
+
+          me = new naver.maps.Marker({
+            position: map.getCenter(),
+            map,
+            icon: {
+              content: '<div style="font-size:24px;">🔵</div>',
+              anchor: new naver.maps.Point(12, 12)
+            }
+          });
+          debugLog('✓ 마커 생성 성공');
+
+          // 상태 메시지 숨기고 HUD 표시
+          statusDiv.style.display = 'none';
+          hudDiv.style.display = 'flex';
+
+        } catch (e) {
+          debugLog('❌ 맵 초기화 실패: ' + e.message);
+          statusDiv.innerHTML = `
+        <div style="font-size:24px; margin-bottom:12px;">❌</div>
+        <div style="color:#f00;">맵 초기화 실패</div>
+        <div style="font-size:12px; margin-top:8px;">${e.message}</div>
+      `;
+          console.error(e);
+          return;
+        }
+
+        // UI refs
+        const $speed = document.getElementById('speed');
+        const $heading = document.getElementById('heading');
+        const $lat = document.getElementById('lat');
+        const $lng = document.getElementById('lng');
+        const $acc = document.getElementById('acc');
+        const $app = document.getElementById('app');
+        const hud = document.getElementById('hud');
+
+        // controls
+        document.getElementById('mirrorBtn').onclick = () => $app.classList.toggle('mirror');
+        let dark = true;
+        document.getElementById('themeBtn').onclick = () => {
+          dark = !dark;
+          document.body.style.background = dark ? '#000' : '#fff';
+          hud.style.color = dark ? '#0ff' : '#005';
+        };
+        let paused = false;
+        document.getElementById('pauseBtn').onclick = () => {
+          paused = !paused;
+          document.getElementById('pauseBtn').textContent = paused ? '재개' : '일시정지';
+          debugLog(paused ? '일시정지됨' : '재개됨');
+        };
+
+        // state
+        let last = null;
+        const smoothSpeed = ema(0.35);
+        const smoothHeading = ema(0.25);
+        let compass = null;
+
+        // device orientation
+        window.addEventListener('deviceorientation', (e) => {
+          const hdg = (e.webkitCompassHeading != null) ? e.webkitCompassHeading : (360 - (e.alpha || 0));
+          if (!isNaN(hdg)) compass = (hdg + 360) % 360;
+        }, true);
+
+        // geolocation stream
+        if (!navigator.geolocation) {
+          debugLog('❌ Geolocation 미지원');
+          alert('이 브라우저는 Geolocation을 지원하지 않습니다.');
+          return;
+        }
+
+        debugLog('✓ Geolocation 지원됨 - 위치 추적 시작');
+        statusDiv.innerHTML = `
+      <div style="font-size:24px; margin-bottom:12px;">📍</div>
+      <div>GPS 신호 대기 중...</div>
+      <div style="font-size:12px; margin-top:8px; opacity:0.8;">
+        위치 권한을 허용해주세요
       </div>
     `;
-    debugLog('❌ FATAL: Naver Maps API 로드 실패');
-    return;
-  }
+        statusDiv.style.display = 'block';
 
-  debugLog('✓ Naver Maps API 로드 성공');
+        const watchId = navigator.geolocation.watchPosition(onPos, onErr, {
+          enableHighAccuracy: true,
+          maximumAge: 0,
+          timeout: 10000
+        });
 
-  // --- helpers ---
-  const toKmh = v => v == null ? null : Math.max(0, v * 3.6);
-  const hav = (a)=>Math.sin(a/2)**2;
-  const R = 6371000;
-  const dist = (lat1,lon1,lat2,lon2)=>{
-    const φ1=lat1*Math.PI/180, φ2=lat2*Math.PI/180, dφ=(lat2-lat1)*Math.PI/180, dλ=(lon2-lon1)*Math.PI/180;
-    return 2*R*Math.asin(Math.sqrt(hav(dφ)+Math.cos(φ1)*Math.cos(φ2)*hav(dλ)));
-  };
-  const bearing = (lat1,lon1,lat2,lon2)=>{
-    const φ1=lat1*Math.PI/180, φ2=lat2*Math.PI/180, λ1=lon1*Math.PI/180, λ2=lon2*Math.PI/180;
-    const y=Math.sin(λ2-λ1)*Math.cos(φ2);
-    const x=Math.cos(φ1)*Math.sin(φ2)-Math.sin(φ1)*Math.cos(φ2)*Math.cos(λ2-λ1);
-    let θ=Math.atan2(y,x)*180/Math.PI;
-    return (θ+360)%360;
-  };
-  const ema = (alpha) => {
-    let v=null; return x => { v = (v==null)? x : (alpha*x + (1-alpha)*v); return v; };
-  };
+        let firstFix = true;
 
-  // --- map 초기화 ---
-  let map, me;
-  try {
-    debugLog('맵 객체 생성 시작...');
-    map = new naver.maps.Map('map', {
-      center: new naver.maps.LatLng(37.5665, 126.9780),
-      zoom: 16,
-      mapDataControl:false,
-      logoControl:false,
-      scaleControl:false,
-      zoomControl:false,
-      draggable:true,
-      pinchZoom:true
-    });
-    debugLog('✓ 맵 객체 생성 성공');
+        function onPos(p) {
+          if (firstFix) {
+            statusDiv.style.display = 'none';
+            hudDiv.style.display = 'flex';
+            firstFix = false;
+          }
 
-    me = new naver.maps.Marker({ 
-      position: map.getCenter(), 
-      map, 
-      icon: { 
-        content: '<div style="font-size:24px;">🔵</div>', 
-        anchor: new naver.maps.Point(12,12) 
+          if (paused) return;
+
+          const { latitude, longitude, accuracy, speed: vms } = p.coords;
+          const now = { lat: latitude, lng: longitude, t: p.timestamp };
+          let kmh = toKmh(vms);
+          let hdg = compass;
+
+          if (last) {
+            const d = dist(last.lat, last.lng, now.lat, now.lng);
+            const dt = Math.max(0.5, (now.t - last.t) / 1000);
+            const v = d / dt;
+            if (kmh == null || isNaN(kmh)) kmh = toKmh(v);
+            if (hdg == null) hdg = bearing(last.lat, last.lng, now.lat, now.lng);
+          }
+
+          if (kmh != null) kmh = smoothSpeed(kmh);
+          if (hdg != null) hdg = smoothHeading(hdg);
+
+          // update map
+          if (map && me) {
+            const latlng = new naver.maps.LatLng(now.lat, now.lng);
+            me.setPosition(latlng);
+            map.setCenter(latlng);
+            if (hdg != null) map.setHeading(hdg);
+          }
+
+          // update HUD
+          $speed.textContent = kmh != null ? Math.round(kmh) : '--';
+          $heading.textContent = hdg != null ? Math.round(hdg) : '--';
+          $lat.textContent = now.lat.toFixed(6);
+          $lng.textContent = now.lng.toFixed(6);
+          $acc.textContent = accuracy != null ? Math.round(accuracy) : '--';
+
+          if (!last) {
+            debugLog('✓ 첫 GPS 위치 수신: ' + now.lat.toFixed(4) + ', ' + now.lng.toFixed(4));
+            debugLog('✓ 정확도: ' + Math.round(accuracy) + 'm');
+          }
+          last = now;
+        }
+
+        function onErr(err) {
+          debugLog('❌ 위치 오류 [' + err.code + ']: ' + err.message);
+
+          let errorMsg = '위치 정보를 가져올 수 없습니다.';
+          if (err.code === 1) {
+            errorMsg = '위치 권한이 거부되었습니다.<br>브라우저 설정에서 위치 권한을 허용해주세요.';
+          } else if (err.code === 2) {
+            errorMsg = '위치 정보를 사용할 수 없습니다.<br>GPS 신호를 확인해주세요.';
+          } else if (err.code === 3) {
+            errorMsg = '위치 요청 시간이 초과되었습니다.';
+          }
+
+          statusDiv.innerHTML = `
+        <div style="font-size:24px; margin-bottom:12px;">⚠️</div>
+        <div style="color:#ff0;">${errorMsg}</div>
+      `;
+          statusDiv.style.display = 'block';
+        }
+
+        // iOS 권한 요청
+        if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function') {
+          debugLog('iOS 방향 센서 권한 필요 - 화면 터치 시 요청');
+          window.addEventListener('click', async function once() {
+            window.removeEventListener('click', once);
+            try {
+              const result = await DeviceOrientationEvent.requestPermission();
+              debugLog('방향 센서 권한: ' + result);
+            } catch (e) {
+              debugLog('방향 센서 권한 오류: ' + e.message);
+            }
+          });
+        }
+
+        debugLog('=== 초기화 완료 ===');
       }
-    });
-    debugLog('✓ 마커 생성 성공');
 
-    // 상태 메시지 숨기고 HUD 표시
-    statusDiv.style.display = 'none';
-    hudDiv.style.display = 'flex';
-    
-  } catch(e) {
-    debugLog('❌ 맵 초기화 실패: ' + e.message);
-    statusDiv.innerHTML = `
-      <div style="font-size:24px; margin-bottom:12px;">❌</div>
-      <div style="color:#f00;">맵 초기화 실패</div>
-      <div style="font-size:12px; margin-top:8px;">${e.message}</div>
-    `;
-    console.error(e);
-    return;
-  }
-
-  // UI refs
-  const $speed = document.getElementById('speed');
-  const $heading = document.getElementById('heading');
-  const $lat = document.getElementById('lat');
-  const $lng = document.getElementById('lng');
-  const $acc = document.getElementById('acc');
-  const $app = document.getElementById('app');
-  const hud = document.getElementById('hud');
-
-  // controls
-  document.getElementById('mirrorBtn').onclick = ()=> $app.classList.toggle('mirror');
-  let dark=true;
-  document.getElementById('themeBtn').onclick = ()=>{
-    dark=!dark;
-    document.body.style.background = dark ? '#000' : '#fff';
-    hud.style.color = dark ? '#0ff' : '#005';
-  };
-  let paused=false;
-  document.getElementById('pauseBtn').onclick = ()=>{
-    paused = !paused;
-    document.getElementById('pauseBtn').textContent = paused ? '재개' : '일시정지';
-    debugLog(paused ? '일시정지됨' : '재개됨');
-  };
-
-  // state
-  let last = null;
-  const smoothSpeed = ema(0.35);
-  const smoothHeading = ema(0.25);
-  let compass = null;
-
-  // device orientation
-  window.addEventListener('deviceorientation', (e)=>{
-    const hdg = (e.webkitCompassHeading != null) ? e.webkitCompassHeading : (360 - (e.alpha||0));
-    if (!isNaN(hdg)) compass = (hdg+360)%360;
-  }, true);
-
-  // geolocation stream
-  if (!navigator.geolocation) {
-    debugLog('❌ Geolocation 미지원');
-    alert('이 브라우저는 Geolocation을 지원하지 않습니다.');
-    return;
-  }
-  
-  debugLog('✓ Geolocation 지원됨 - 위치 추적 시작');
-  statusDiv.innerHTML = `
-    <div style="font-size:24px; margin-bottom:12px;">📍</div>
-    <div>GPS 신호 대기 중...</div>
-    <div style="font-size:12px; margin-top:8px; opacity:0.8;">
-      위치 권한을 허용해주세요
-    </div>
-  `;
-
-  const watchId = navigator.geolocation.watchPosition(onPos, onErr, {
-    enableHighAccuracy:true, 
-    maximumAge:0, 
-    timeout:10000
-  });
-
-  let firstFix = true;
-
-  function onPos(p){
-    if (firstFix) {
-      statusDiv.style.display = 'none';
-      hudDiv.style.display = 'flex';
-      firstFix = false;
-    }
-
-    if (paused) return;
-    
-    const { latitude, longitude, accuracy, speed: vms } = p.coords;
-    const now = { lat:latitude, lng:longitude, t:p.timestamp };
-    let kmh = toKmh(vms);
-    let hdg = compass;
-
-    if (last){
-      const d = dist(last.lat,last.lng, now.lat, now.lng);
-      const dt = Math.max(0.5, (now.t - last.t)/1000);
-      const v = d/dt;
-      if (kmh==null || isNaN(kmh)) kmh = toKmh(v);
-      if (hdg==null) hdg = bearing(last.lat,last.lng, now.lat, now.lng);
-    }
-
-    if (kmh!=null) kmh = smoothSpeed(kmh);
-    if (hdg!=null) hdg = smoothHeading(hdg);
-
-    // update map
-    if (map && me) {
-      const latlng = new naver.maps.LatLng(now.lat, now.lng);
-      me.setPosition(latlng);
-      map.setCenter(latlng);
-      if (hdg!=null) map.setHeading(hdg);
-    }
-
-    // update HUD
-    $speed.textContent = kmh!=null ? Math.round(kmh) : '--';
-    $heading.textContent = hdg!=null ? Math.round(hdg) : '--';
-    $lat.textContent = now.lat.toFixed(6);
-    $lng.textContent = now.lng.toFixed(6);
-    $acc.textContent = accuracy!=null ? Math.round(accuracy) : '--';
-
-    if (!last) {
-      debugLog('✓ 첫 GPS 위치 수신: ' + now.lat.toFixed(4) + ', ' + now.lng.toFixed(4));
-      debugLog('✓ 정확도: ' + Math.round(accuracy) + 'm');
-    }
-    last = now;
-  }
-
-  function onErr(err){
-    debugLog('❌ 위치 오류 [' + err.code + ']: ' + err.message);
-    
-    let errorMsg = '위치 정보를 가져올 수 없습니다.';
-    if (err.code === 1) {
-      errorMsg = '위치 권한이 거부되었습니다.<br>브라우저 설정에서 위치 권한을 허용해주세요.';
-    } else if (err.code === 2) {
-      errorMsg = '위치 정보를 사용할 수 없습니다.<br>GPS 신호를 확인해주세요.';
-    } else if (err.code === 3) {
-      errorMsg = '위치 요청 시간이 초과되었습니다.';
-    }
-    
-    statusDiv.innerHTML = `
-      <div style="font-size:24px; margin-bottom:12px;">⚠️</div>
-      <div style="color:#ff0;">${errorMsg}</div>
-    `;
-    statusDiv.style.display = 'block';
-  }
-
-  // iOS 권한 요청
-  if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function') {
-    debugLog('iOS 방향 센서 권한 필요 - 화면 터치 시 요청');
-    window.addEventListener('click', async function once(){
-      window.removeEventListener('click', once);
-      try { 
-        const result = await DeviceOrientationEvent.requestPermission();
-        debugLog('방향 센서 권한: ' + result);
-      } catch(e){
-        debugLog('방향 센서 권한 오류: ' + e.message);
+      // 🔥 페이지 로드 완료 후 초기화 시작
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
       }
-    });
-  }
-
-  debugLog('=== 초기화 완료 ===');
-})();
-</script>
+    })();
+  </script>
 
 </body>
-</html>
+
+</html>ㄹㄹ
