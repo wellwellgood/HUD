@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>HUD + Map (Naver)</title>
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>HUD + Map (Naver) - Fixed</title>
 <style>
   html, body { height: 100%; margin: 0; background:#000; color:#0ff; }
   #app { position:relative; height:100%; }
@@ -17,20 +18,38 @@
   .meta  { font-size:14px; opacity:.9 }
   .panel {
     position:absolute; bottom:12px; left:12px; right:12px;
-    display:flex; gap:8px; pointer-events:auto;
+    display:flex; gap:8px; pointer-events:auto; flex-wrap:wrap;
   }
   .btn {
     background:#011; color:#0ff; border:1px solid #055; border-radius:8px;
     padding:10px 14px; font-weight:700; cursor:pointer;
   }
   .mirror { transform:scaleX(-1); }
+  .debug {
+    position:absolute; top:120px; left:12px; right:12px;
+    background:rgba(0,0,0,0.8); color:#0ff; padding:12px;
+    font-family:monospace; font-size:12px; border:1px solid #055;
+    max-height:200px; overflow-y:auto;
+  }
+  .status {
+    position:absolute; top:50%; left:50%; transform:translate(-50%, -50%);
+    background:rgba(0,0,0,0.9); color:#0ff; padding:20px;
+    border:2px solid #055; border-radius:12px; text-align:center;
+    font-family:monospace;
+  }
 </style>
-<script src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=vu5xn26jj6&submodules=geocoder&v=2"></script>
+
+<!-- 🔥 중요: Naver Maps API를 먼저 로드 -->
+<script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=i6my73bw6a&submodules=geocoder"></script>
 </head>
 <body>
 <div id="app">
   <div id="map"></div>
-  <div id="hud" class="hud">
+  <div id="status" class="status">
+    <div style="font-size:24px; margin-bottom:12px;">🗺️</div>
+    <div>지도 로딩 중...</div>
+  </div>
+  <div id="hud" class="hud" style="display:none;">
     <div class="speed" id="speed">--</div>
     <div class="meta">
       <div>HDG <span id="heading">--</span>°</div>
@@ -38,15 +57,61 @@
       <div>ACC <span id="acc">--</span>m · SAT NA</div>
     </div>
   </div>
+  <div class="debug" id="debug" style="display:none;">
+    <div><strong>디버그 정보:</strong></div>
+    <div id="debugInfo">초기화 중...</div>
+  </div>
   <div class="panel">
     <button class="btn" id="mirrorBtn">미러 모드</button>
     <button class="btn" id="themeBtn">다크/라이트</button>
     <button class="btn" id="pauseBtn">일시정지</button>
+    <button class="btn" id="debugBtn">디버그 토글</button>
   </div>
 </div>
 
+<!-- 🔥 메인 스크립트는 Naver Maps API 로드 후 실행 -->
 <script>
 (function(){
+  const debugLog = (msg) => {
+    const debugDiv = document.getElementById('debugInfo');
+    if (!debugDiv) return;
+    const time = new Date().toLocaleTimeString();
+    debugDiv.innerHTML += `<div>[${time}] ${msg}</div>`;
+    console.log('[DEBUG]', msg);
+  };
+
+  const statusDiv = document.getElementById('status');
+  const hudDiv = document.getElementById('hud');
+  const debugDiv = document.getElementById('debug');
+
+  // 디버그 토글
+  document.getElementById('debugBtn').onclick = () => {
+    debugDiv.style.display = debugDiv.style.display === 'none' ? 'block' : 'none';
+  };
+
+  debugLog('=== 초기화 시작 ===');
+  debugLog('현재 URL: ' + window.location.href);
+  debugLog('현재 도메인: ' + window.location.hostname);
+  debugLog('naver 객체 존재: ' + (typeof naver !== 'undefined'));
+  debugLog('naver.maps 존재: ' + (typeof naver !== 'undefined' && typeof naver.maps !== 'undefined'));
+
+  // Naver Maps API 확인
+  if (typeof naver === 'undefined' || typeof naver.maps === 'undefined') {
+    statusDiv.innerHTML = `
+      <div style="font-size:24px; margin-bottom:12px;">❌</div>
+      <div style="color:#f00; margin-bottom:8px;">Naver Maps API 로드 실패</div>
+      <div style="font-size:12px; opacity:0.8;">
+        클라이언트 ID를 확인하거나<br>
+        로컬 테스트는 http://localhost 또는 http://127.0.0.1을<br>
+        Naver Cloud 콘솔에 등록하세요
+      </div>
+    `;
+    debugLog('❌ FATAL: Naver Maps API 로드 실패');
+    return;
+  }
+
+  debugLog('✓ Naver Maps API 로드 성공');
+
   // --- helpers ---
   const toKmh = v => v == null ? null : Math.max(0, v * 3.6);
   const hav = (a)=>Math.sin(a/2)**2;
@@ -66,18 +131,46 @@
     let v=null; return x => { v = (v==null)? x : (alpha*x + (1-alpha)*v); return v; };
   };
 
-  // --- map ---
-  const map = new naver.maps.Map('map', {
-    center: new naver.maps.LatLng(37.5665, 126.9780),
-    zoom: 16,
-    mapDataControl:false,
-    logoControl:false,
-    scaleControl:false,
-    zoomControl:false,
-    draggable:true, // 필요 시 false
-    pinchZoom:true
-  });
-  const me = new naver.maps.Marker({ position: map.getCenter(), map, icon: { content: '🔵', anchor: new naver.maps.Point(10,10) }});
+  // --- map 초기화 ---
+  let map, me;
+  try {
+    debugLog('맵 객체 생성 시작...');
+    map = new naver.maps.Map('map', {
+      center: new naver.maps.LatLng(37.5665, 126.9780),
+      zoom: 16,
+      mapDataControl:false,
+      logoControl:false,
+      scaleControl:false,
+      zoomControl:false,
+      draggable:true,
+      pinchZoom:true
+    });
+    debugLog('✓ 맵 객체 생성 성공');
+
+    me = new naver.maps.Marker({ 
+      position: map.getCenter(), 
+      map, 
+      icon: { 
+        content: '<div style="font-size:24px;">🔵</div>', 
+        anchor: new naver.maps.Point(12,12) 
+      }
+    });
+    debugLog('✓ 마커 생성 성공');
+
+    // 상태 메시지 숨기고 HUD 표시
+    statusDiv.style.display = 'none';
+    hudDiv.style.display = 'flex';
+    
+  } catch(e) {
+    debugLog('❌ 맵 초기화 실패: ' + e.message);
+    statusDiv.innerHTML = `
+      <div style="font-size:24px; margin-bottom:12px;">❌</div>
+      <div style="color:#f00;">맵 초기화 실패</div>
+      <div style="font-size:12px; margin-top:8px;">${e.message}</div>
+    `;
+    console.error(e);
+    return;
+  }
 
   // UI refs
   const $speed = document.getElementById('speed');
@@ -100,6 +193,7 @@
   document.getElementById('pauseBtn').onclick = ()=>{
     paused = !paused;
     document.getElementById('pauseBtn').textContent = paused ? '재개' : '일시정지';
+    debugLog(paused ? '일시정지됨' : '재개됨');
   };
 
   // state
@@ -108,24 +202,45 @@
   const smoothHeading = ema(0.25);
   let compass = null;
 
-  // device orientation (iOS: absolute heading)
+  // device orientation
   window.addEventListener('deviceorientation', (e)=>{
-    // iOS webkitCompassHeading, 안 되면 e.alpha 사용
     const hdg = (e.webkitCompassHeading != null) ? e.webkitCompassHeading : (360 - (e.alpha||0));
     if (!isNaN(hdg)) compass = (hdg+360)%360;
   }, true);
 
   // geolocation stream
   if (!navigator.geolocation) {
-    alert('Geolocation 미지원');
+    debugLog('❌ Geolocation 미지원');
+    alert('이 브라우저는 Geolocation을 지원하지 않습니다.');
     return;
   }
+  
+  debugLog('✓ Geolocation 지원됨 - 위치 추적 시작');
+  statusDiv.innerHTML = `
+    <div style="font-size:24px; margin-bottom:12px;">📍</div>
+    <div>GPS 신호 대기 중...</div>
+    <div style="font-size:12px; margin-top:8px; opacity:0.8;">
+      위치 권한을 허용해주세요
+    </div>
+  `;
+
   const watchId = navigator.geolocation.watchPosition(onPos, onErr, {
-    enableHighAccuracy:true, maximumAge:0, timeout:10000
+    enableHighAccuracy:true, 
+    maximumAge:0, 
+    timeout:10000
   });
 
+  let firstFix = true;
+
   function onPos(p){
+    if (firstFix) {
+      statusDiv.style.display = 'none';
+      hudDiv.style.display = 'flex';
+      firstFix = false;
+    }
+
     if (paused) return;
+    
     const { latitude, longitude, accuracy, speed: vms } = p.coords;
     const now = { lat:latitude, lng:longitude, t:p.timestamp };
     let kmh = toKmh(vms);
@@ -134,7 +249,7 @@
     if (last){
       const d = dist(last.lat,last.lng, now.lat, now.lng);
       const dt = Math.max(0.5, (now.t - last.t)/1000);
-      const v = d/dt; // m/s
+      const v = d/dt;
       if (kmh==null || isNaN(kmh)) kmh = toKmh(v);
       if (hdg==null) hdg = bearing(last.lat,last.lng, now.lat, now.lng);
     }
@@ -143,10 +258,12 @@
     if (hdg!=null) hdg = smoothHeading(hdg);
 
     // update map
-    const latlng = new naver.maps.LatLng(now.lat, now.lng);
-    me.setPosition(latlng);
-    map.setCenter(latlng);
-    if (hdg!=null) map.setHeading(hdg); // 회전 HUD 효과
+    if (map && me) {
+      const latlng = new naver.maps.LatLng(now.lat, now.lng);
+      me.setPosition(latlng);
+      map.setCenter(latlng);
+      if (hdg!=null) map.setHeading(hdg);
+    }
 
     // update HUD
     $speed.textContent = kmh!=null ? Math.round(kmh) : '--';
@@ -155,22 +272,49 @@
     $lng.textContent = now.lng.toFixed(6);
     $acc.textContent = accuracy!=null ? Math.round(accuracy) : '--';
 
+    if (!last) {
+      debugLog('✓ 첫 GPS 위치 수신: ' + now.lat.toFixed(4) + ', ' + now.lng.toFixed(4));
+      debugLog('✓ 정확도: ' + Math.round(accuracy) + 'm');
+    }
     last = now;
   }
 
   function onErr(err){
-    alert('위치 오류: ' + err.message);
+    debugLog('❌ 위치 오류 [' + err.code + ']: ' + err.message);
+    
+    let errorMsg = '위치 정보를 가져올 수 없습니다.';
+    if (err.code === 1) {
+      errorMsg = '위치 권한이 거부되었습니다.<br>브라우저 설정에서 위치 권한을 허용해주세요.';
+    } else if (err.code === 2) {
+      errorMsg = '위치 정보를 사용할 수 없습니다.<br>GPS 신호를 확인해주세요.';
+    } else if (err.code === 3) {
+      errorMsg = '위치 요청 시간이 초과되었습니다.';
+    }
+    
+    statusDiv.innerHTML = `
+      <div style="font-size:24px; margin-bottom:12px;">⚠️</div>
+      <div style="color:#ff0;">${errorMsg}</div>
+    `;
+    statusDiv.style.display = 'block';
   }
 
-  // 권한 요청(iOS 13+ 방향 센서)
+  // iOS 권한 요청
   if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function') {
-    // 사용자가 버튼 눌러야 허용 가능. 첫 터치 이벤트에 묶어 요청하는 것이 안전.
+    debugLog('iOS 방향 센서 권한 필요 - 화면 터치 시 요청');
     window.addEventListener('click', async function once(){
       window.removeEventListener('click', once);
-      try { await DeviceOrientationEvent.requestPermission(); } catch(e){}
+      try { 
+        const result = await DeviceOrientationEvent.requestPermission();
+        debugLog('방향 센서 권한: ' + result);
+      } catch(e){
+        debugLog('방향 센서 권한 오류: ' + e.message);
+      }
     });
   }
+
+  debugLog('=== 초기화 완료 ===');
 })();
 </script>
+
 </body>
 </html>
