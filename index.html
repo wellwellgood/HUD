@@ -11,7 +11,7 @@
       height: 100%;
       margin: 0;
       background: none;
-      color: #0ff;
+      color: #000;
     }
 
     #app {
@@ -73,6 +73,23 @@
     .mirror {
       transform: scaleX(-1);
     }
+
+    #centerPin {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 28px;
+      height: 28px;
+      transform: translate(-50%, -100%);
+      /* 핀 끝이 정확히 지도 중앙을 가리키도록 */
+      pointer-events: none;
+      /* 클릭 방해 금지 */
+      z-index: 2;
+    }
+
+    #centerPin svg {
+      display: block
+    }
   </style>
 </head>
 
@@ -87,6 +104,14 @@
         <div>ACC <span id="acc">--</span>m · SAT NA</div>
       </div>
     </div>
+    <div id="centerPin" aria-hidden="true">
+      <!-- 심플한 SVG 핀. 원하면 다른 아이콘으로 교체 -->
+      <svg viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="6" fill="#00E5A8" />
+        <circle cx="12" cy="12" r="3" fill="#fff" />
+      </svg>
+    </div>
+
     <div class="panel">
       <button class="btn" id="mirrorBtn">미러 모드</button>
       <button class="btn" id="themeBtn">다크/라이트</button>
@@ -98,185 +123,192 @@
   <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=i6my73bw6a"></script>
 
   <!-- 2. API 로드 완료 후 실행 -->
-  <script>
-    // DOM과 naver 객체가 준비될 때까지 대기
-    window.addEventListener('load', function () {
-      // naver 객체 확인
-      if (typeof naver === 'undefined') {
-        alert('네이버 Maps API 로드 실패. Client ID를 확인하세요.');
-        return;
+ <script>
+  window.addEventListener('load', () => {
+    if (typeof naver === 'undefined') {
+      alert('네이버 Maps API 로드 실패. Client ID 확인');
+      return;
+    }
+
+    // ========= utils =========
+    const toKmh = v => (v == null ? null : Math.max(0, v * 3.6));
+    const hav = a => Math.sin(a / 2) ** 2;
+    const R = 6371000;
+    const dist = (lat1, lon1, lat2, lon2) => {
+      const φ1 = (lat1 * Math.PI) / 180, φ2 = (lat2 * Math.PI) / 180;
+      const dφ = ((lat2 - lat1) * Math.PI) / 180, dλ = ((lon2 - lon1) * Math.PI) / 180;
+      return 2 * R * Math.asin(Math.sqrt(hav(dφ) + Math.cos(φ1) * Math.cos(φ2) * hav(dλ)));
+    };
+    const bearing = (lat1, lon1, lat2, lon2) => {
+      const φ1 = (lat1 * Math.PI) / 180, φ2 = (lat2 * Math.PI) / 180;
+      const λ1 = (lon1 * Math.PI) / 180, λ2 = (lat2 * Math.PI) / 180 + (lon2 - lat2) * 0; // keep vars aligned
+      const y = Math.sin((lon2 - lon1) * Math.PI / 180) * Math.cos(φ2);
+      const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos((lon2 - lon1) * Math.PI / 180);
+      let θ = (Math.atan2(y, x) * 180) / Math.PI;
+      return (θ + 360) % 360;
+    };
+    const ema = (alpha) => {
+      let v = null;
+      return (x) => (v = v == null ? x : alpha * x + (1 - alpha) * v);
+    };
+    const rAFThrottle = (fn) => {
+      let scheduled = false, lastArgs = null;
+      return (...args) => {
+        lastArgs = args;
+        if (scheduled) return;
+        scheduled = true;
+        requestAnimationFrame(() => { scheduled = false; fn(...lastArgs); });
+      };
+    };
+
+    // ========= DOM refs =========
+    const $app = document.getElementById('app');
+    const $hud = document.getElementById('hud');
+    const $speed = document.getElementById('speed');
+    const $heading = document.getElementById('heading');
+    const $lat = document.getElementById('lat');
+    const $lng = document.getElementById('lng');
+    const $acc = document.getElementById('acc');
+    const $mirrorBtn = document.getElementById('mirrorBtn');
+    const $themeBtn = document.getElementById('themeBtn');
+    const $pauseBtn = document.getElementById('pauseBtn');
+
+    // ========= state =========
+    const state = {
+      paused: false,
+      dark: true,
+      compass: null,
+      lastFix: null,
+      smoothSpeed: ema(0.35),
+      smoothHeading: ema(0.25),
+    };
+
+    // ========= MapController =========
+    const MapController = (() => {
+      const map = new naver.maps.Map('map', {
+        center: new naver.maps.LatLng(37.5665, 126.978),
+        zoom: 16,
+        mapDataControl: false,
+        logoControl: false,
+        scaleControl: false,
+        zoomControl: false,
+        draggable: true,
+        pinchZoom: true,
+      });
+
+      // 실제 마커는 내부 위치 저장용. 시각적 핀은 #centerPin가 담당
+      const me = new naver.maps.Marker({
+        position: map.getCenter(),
+        map,
+        icon: { content: ' ', anchor: new naver.maps.Point(0, 0) }
+      });
+
+      const accCircle = new naver.maps.Circle({
+        map, center: map.getCenter(), radius: 0,
+        fillColor: '#00E5A8', fillOpacity: 0.15,
+        strokeColor: '#00E5A8', strokeOpacity: 0.7, strokeWeight: 1
+      });
+
+      const setPose = rAFThrottle((lat, lng, hdg, acc) => {
+        const ll = new naver.maps.LatLng(lat, lng);
+        me.setPosition(ll);
+        accCircle.setCenter(ll);
+        if (acc != null) accCircle.setRadius(acc);
+        map.setCenter(ll);
+        if (hdg != null) map.setHeading(hdg);
+      });
+
+      return { setPose };
+    })();
+
+    // ========= UIController =========
+    const UIController = (() => {
+      function updateHUD({ kmh, hdg, lat, lng, acc }) {
+        $speed.textContent = kmh != null ? Math.round(kmh) : '--';
+        $heading.textContent = hdg != null ? Math.round(hdg) : '--';
+        $lat.textContent = lat.toFixed(6);
+        $lng.textContent = lng.toFixed(6);
+        $acc.textContent = acc != null ? Math.round(acc) : '--';
+      }
+      function toggleMirror() { $app.classList.toggle('mirror'); }
+      function toggleTheme() {
+        state.dark = !state.dark;
+        document.body.style.background = state.dark ? '#000' : '#fff';
+        $hud.style.color = state.dark ? '#0ff' : '#005';
+      }
+      function togglePause() {
+        state.paused = !state.paused;
+        $pauseBtn.textContent = state.paused ? '재개' : '일시정지';
+      }
+      return { updateHUD, toggleMirror, toggleTheme, togglePause };
+    })();
+
+    // ========= OrientationController =========
+    const OrientationController = (() => {
+      function onDeviceOrientation(e) {
+        const hdg = e.webkitCompassHeading != null ? e.webkitCompassHeading : 360 - (e.alpha || 0);
+        if (!isNaN(hdg)) state.compass = (hdg + 360) % 360;
+      }
+      window.addEventListener('deviceorientation', onDeviceOrientation, true);
+
+      // iOS 권한
+      if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        window.addEventListener('click', async function once() {
+          window.removeEventListener('click', once);
+          try { await DeviceOrientationEvent.requestPermission(); } catch {}
+        });
+      }
+      return {};
+    })();
+
+    // ========= GeoController =========
+    const GeoController = (() => {
+      if (!navigator.geolocation) {
+        alert('Geolocation 미지원');
+        return {};
       }
 
-      (function () {
-        // --- helpers ---
-        const toKmh = (v) => (v == null ? null : Math.max(0, v * 3.6));
-        const hav = (a) => Math.sin(a / 2) ** 2;
-        const R = 6371000;
-        const dist = (lat1, lon1, lat2, lon2) => {
-          const φ1 = (lat1 * Math.PI) / 180,
-            φ2 = (lat2 * Math.PI) / 180,
-            dφ = ((lat2 - lat1) * Math.PI) / 180,
-            dλ = ((lon2 - lon1) * Math.PI) / 180;
-          return (
-            2 *
-            R *
-            Math.asin(
-              Math.sqrt(hav(dφ) + Math.cos(φ1) * Math.cos(φ2) * hav(dλ))
-            )
-          );
-        };
-        const bearing = (lat1, lon1, lat2, lon2) => {
-          const φ1 = (lat1 * Math.PI) / 180,
-            φ2 = (lat2 * Math.PI) / 180,
-            λ1 = (lon1 * Math.PI) / 180,
-            λ2 = (lon2 * Math.PI) / 180;
-          const y = Math.sin(λ2 - λ1) * Math.cos(φ2);
-          const x =
-            Math.cos(φ1) * Math.sin(φ2) -
-            Math.sin(φ1) * Math.cos(φ2) * Math.cos(λ2 - λ1);
-          let θ = (Math.atan2(y, x) * 180) / Math.PI;
-          return (θ + 360) % 360;
-        };
-        const ema = (alpha) => {
-          let v = null;
-          return (x) => {
-            v = v == null ? x : alpha * x + (1 - alpha) * v;
-            return v;
-          };
-        };
+      function onPos(p) {
+        if (state.paused) return;
 
-        // --- map ---
-        const map = new naver.maps.Map("map", {
-          center: new naver.maps.LatLng(37.5665, 126.978),
-          zoom: 16,
-          mapDataControl: false,
-          logoControl: false,
-          scaleControl: false,
-          zoomControl: false,
-          draggable: true,
-          pinchZoom: true,
-        });
+        const { latitude, longitude, accuracy, speed: vms } = p.coords;
+        const now = { lat: latitude, lng: longitude, t: p.timestamp };
 
-        const me = new naver.maps.Marker({
-          position: map.getCenter(),
-          map,
-          icon: { content: "🔵", anchor: new naver.maps.Point(10, 10) },
-        });
+        let kmh = toKmh(vms);
+        let hdg = state.compass;
 
-        // UI refs
-        const $speed = document.getElementById("speed");
-        const $heading = document.getElementById("heading");
-        const $lat = document.getElementById("lat");
-        const $lng = document.getElementById("lng");
-        const $acc = document.getElementById("acc");
-        const $app = document.getElementById("app");
-        const hud = document.getElementById("hud");
-
-        // controls
-        document.getElementById("mirrorBtn").onclick = () =>
-          $app.classList.toggle("mirror");
-        let dark = true;
-        document.getElementById("themeBtn").onclick = () => {
-          dark = !dark;
-          document.body.style.background = dark ? "#000" : "#fff";
-          hud.style.color = dark ? "#0ff" : "#005";
-        };
-        let paused = false;
-        document.getElementById("pauseBtn").onclick = () => {
-          paused = !paused;
-          document.getElementById("pauseBtn").textContent = paused
-            ? "재개"
-            : "일시정지";
-        };
-
-        // state
-        let last = null;
-        const smoothSpeed = ema(0.35);
-        const smoothHeading = ema(0.25);
-        let compass = null;
-
-        // device orientation
-        window.addEventListener(
-          "deviceorientation",
-          (e) => {
-            const hdg =
-              e.webkitCompassHeading != null
-                ? e.webkitCompassHeading
-                : 360 - (e.alpha || 0);
-            if (!isNaN(hdg)) compass = (hdg + 360) % 360;
-          },
-          true
-        );
-
-        // geolocation stream
-        if (!navigator.geolocation) {
-          alert("Geolocation 미지원");
-          return;
-        }
-        const watchId = navigator.geolocation.watchPosition(onPos, onErr, {
-          enableHighAccuracy: true,
-          maximumAge: 0,
-          timeout: 10000,
-        });
-
-        function onPos(p) {
-          if (paused) return;
-          const { latitude, longitude, accuracy, speed: vms } = p.coords;
-          const now = { lat: latitude, lng: longitude, t: p.timestamp };
-          let kmh = toKmh(vms);
-          let hdg = compass;
-
-          if (last) {
-            const d = dist(last.lat, last.lng, now.lat, now.lng);
-            const dt = Math.max(0.5, (now.t - last.t) / 1000);
-            const v = d / dt;
-            if (kmh == null || isNaN(kmh)) kmh = toKmh(v);
-            if (hdg == null)
-              hdg = bearing(last.lat, last.lng, now.lat, now.lng);
-          }
-
-          if (kmh != null) kmh = smoothSpeed(kmh);
-          if (hdg != null) hdg = smoothHeading(hdg);
-
-          // update map
-          const latlng = new naver.maps.LatLng(now.lat, now.lng);
-          me.setPosition(latlng);
-          map.setCenter(latlng);
-          if (hdg != null) map.setHeading(hdg);
-
-          // update HUD
-          $speed.textContent = kmh != null ? Math.round(kmh) : "--";
-          $heading.textContent = hdg != null ? Math.round(hdg) : "--";
-          $lat.textContent = now.lat.toFixed(6);
-          $lng.textContent = now.lng.toFixed(6);
-          $acc.textContent = accuracy != null ? Math.round(accuracy) : "--";
-
-          last = now;
+        if (state.lastFix) {
+          const d = dist(state.lastFix.lat, state.lastFix.lng, now.lat, now.lng);
+          const dt = Math.max(0.5, (now.t - state.lastFix.t) / 1000);
+          const v = d / dt;
+          if (kmh == null || isNaN(kmh)) kmh = toKmh(v);
+          if (hdg == null) hdg = bearing(state.lastFix.lat, state.lastFix.lng, now.lat, now.lng);
         }
 
-        function onErr(err) {
-          alert("위치 오류: " + err.message);
-        }
+        if (kmh != null) kmh = state.smoothSpeed(kmh);
+        if (hdg != null) hdg = state.smoothHeading(hdg);
 
-        // iOS 권한 요청
-        if (
-          window.DeviceOrientationEvent &&
-          typeof DeviceOrientationEvent.requestPermission === "function"
-        ) {
-          window.addEventListener("click", async function once() {
-            window.removeEventListener("click", once);
-            try {
-              await DeviceOrientationEvent.requestPermission();
-            } catch (e) { }
-          });
-        }
-      })();
-    });
+        MapController.setPose(now.lat, now.lng, hdg, accuracy);
+        UIController.updateHUD({ kmh, hdg, lat: now.lat, lng: now.lng, acc: accuracy });
 
-    console.log(typeof naver);
-    console.log(naver.maps);
-    console.log(document.getElementById('map'));
-  </script>
+        state.lastFix = now;
+      }
+
+      function onErr(err) { alert('위치 오류: ' + err.message); }
+
+      const watchId = navigator.geolocation.watchPosition(onPos, onErr, {
+        enableHighAccuracy: true, maximumAge: 0, timeout: 10000,
+      });
+
+      return { watchId };
+    })();
+
+    // ========= UI wiring =========
+    $mirrorBtn.onclick = UIController.toggleMirror;
+    $themeBtn.onclick = UIController.toggleTheme;
+    $pauseBtn.onclick = UIController.togglePause;
+  });
+</script>
 </body>
 
 </html>
