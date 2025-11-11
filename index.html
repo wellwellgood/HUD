@@ -142,8 +142,14 @@
 
 <body>
   <div id="app">
-    <div id="map"></div>
-
+    <div id="map">
+      <script>
+        var map = new naver.maps.Map('map', {
+          center: new naver.maps.LatLng(37.5665, 126.978),
+          zoom: 15
+        });
+      </script>
+    </div>
     <div id="status" class="status">
       <div style="font-size:32px; margin-bottom:12px;">📍</div>
       <div style="font-size:18px; margin-bottom:12px;">GPS 초기화 중...</div>
