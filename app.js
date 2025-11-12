@@ -53,21 +53,6 @@ btnLocate.onclick = () => {
     }
 };
 
-btnNorth.onclick = () => {
-    northUp = !northUp;
-    btnNorth.textContent = northUp ? "N↑ 북쪽고정" : "N↻ 헤딩회전";
-    if (northUp) {
-        map.setBearing(0);
-        map.dragRotate.disable();
-        map.touchZoomRotate.enable();
-        map.touchZoomRotate.disableRotation();
-    } else {
-        map.dragRotate.enable();
-        map.touchZoomRotate.enable();
-        map.touchZoomRotate.enableRotation();
-    }
-};
-
 // === 제스처 및 사용자 상태 감지 ===
 map.dragRotate.enable();
 map.touchZoomRotate.enable();
@@ -86,7 +71,9 @@ const geolocate = new maplibregl.GeolocateControl({
     showUserHeading: true,
 });
 map.addControl(geolocate, "top-right");
-map.on("load", () => geolocate.trigger());
+map.on("load", () => { map.resize(); });
+window.addEventListener("orientationchange", () => map.resize());
+window.addEventListener("resize", () => map.resize());
 
 // === GPS 팔로우 ===
 const spdEl = document.getElementById("spd");

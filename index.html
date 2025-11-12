@@ -9,10 +9,16 @@
     />
     <title>3D Road + Buildings HUD</title>
     <style>
-      #map,
-      #map canvas {
-        touch-action: pan-x pan-y; /* 핀치/팬을 MapLibre로 전달 */
+      html, body {
+        height: 100%;
+        margin: 0;
+        overscroll-behavior: none;
       }
+      #map {
+        position: fixed;  /* 또는 absolute */
+        inset: 0;         /* top:0; right:0; bottom:0; left:0 */
+      }
+      #map, #map canvas { touch-action: pan-x pan-y; }
       html,
       body {
         height: 100%;
