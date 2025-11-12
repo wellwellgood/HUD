@@ -134,3 +134,20 @@ btnNorth.onclick = () => {
     btnNorth.textContent = northUp ? "🚗 진행방향" : "N↑ 북쪽고정"; // 네비 스타일이면 진행방향
     applyGesturePolicy();            // ← 여기 추가
 };
+
+document.getElementById("q").addEventListener("keydown", async (e) => {
+    if (e.key === "Enter") {
+        const q = e.target.value.trim();
+        if (!q) return;
+        const res = await fetch(
+            `https://api.maptiler.com/geocoding/${encodeURIComponent(q)}.json?key=2HioygjPVFKopzhBEhM3`
+        );
+        const data = await res.json();
+        if (data.features && data.features.length) {
+            const [lng, lat] = data.features[0].center;
+            map.easeTo({ center: [lng, lat], zoom: 16, duration: 800 });
+        } else {
+            alert("검색 결과 없음");
+        }
+    }
+});

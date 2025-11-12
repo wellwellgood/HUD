@@ -9,16 +9,20 @@
     />
     <title>3D Road + Buildings HUD</title>
     <style>
-      html, body {
+      html,
+      body {
         height: 100%;
         margin: 0;
         overscroll-behavior: none;
       }
       #map {
-        position: fixed;  /* 또는 absolute */
-        inset: 0;         /* top:0; right:0; bottom:0; left:0 */
+        position: fixed; /* 또는 absolute */
+        inset: 0; /* top:0; right:0; bottom:0; left:0 */
       }
-      #map, #map canvas { touch-action: pan-x pan-y; }
+      #map,
+      #map canvas {
+        touch-action: pan-x pan-y;
+      }
       html,
       body {
         height: 100%;
@@ -68,6 +72,16 @@
   </div>
   <body>
     <div id="map"></div>
+    <div
+      id="searchBox"
+      style="position: absolute; left: 12px; top: 12px; z-index: 10"
+    >
+      <input
+        id="q"
+        placeholder="장소 검색…"
+        style="padding: 6px 10px; width: 180px"
+      />
+    </div>
     <div class="hud">
       <div class="chip" id="spd">0 km/h</div>
       <div class="chip" id="brg">0°</div>
