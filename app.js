@@ -153,3 +153,13 @@ map.getCanvas().addEventListener("touchend", (e) => {
         setZoom(map.getZoom() - 1);
     }
 }, { passive: true });
+map.dragRotate.enable();              // 마우스 드래그 회전 허용
+map.touchZoomRotate.enable();         // 터치로 줌/회전 허용
+map.touchZoomRotate.enableRotation(); // 두 손가락 회전 허용
+
+// (선택) 휠로 줌 제어 부드럽게
+map.scrollZoom.enable();
+map.keyboard.enable();
+
+// 모바일 제스처 민감도 보정 (선택)
+map.touchZoomRotate._pitchWithRotate = false;
