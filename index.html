@@ -1,24 +1,64 @@
 <!DOCTYPE html>
 <html lang="ko">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <link href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.12.0/dist/maplibre-gl.css" rel="stylesheet">
-  <title>3D Road + Buildings HUD</title>
-  <style>
-    html,body,#map{height:100%;margin:0}
-    .hud{position:absolute;inset:auto 12px 12px 12px;display:flex;gap:8px}
-    .chip{background:#000a;color:#0ff;padding:8px 12px;border-radius:8px;font:600 12px ui-monospace,monospace}
-  </style>
-</head>
-<body>
-  <div id="map"></div>
-  <div class="hud">
-    <div class="chip" id="spd">0 km/h</div>
-    <div class="chip" id="brg">0°</div>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link
+      href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.12.0/dist/maplibre-gl.css"
+      rel="stylesheet"
+    />
+    <title>3D Road + Buildings HUD</title>
+    <style>
+      html,
+      body,
+      #map {
+        height: 100%;
+        margin: 0;
+      }
+      .hud {
+        position: absolute;
+        inset: auto 12px 12px 12px;
+        display: flex;
+        gap: 8px;
+      }
+      .chip {
+        background: #000a;
+        color: #0ff;
+        padding: 8px 12px;
+        border-radius: 8px;
+        font: 600 12px ui-monospace, monospace;
+      }
+    </style>
+  </head>
+  <div
+    id="ctrl"
+    style="
+      position: absolute;
+      right: 12px;
+      bottom: 12px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      background: #000a;
+      color: #0ff;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font: 600 12px ui-monospace, monospace;
+    "
+  >
+    <button id="pitchDec">−</button>
+    <input id="pitchRange" type="range" min="0" max="85" step="1" value="45" />
+    <button id="pitchInc">+</button>
+    <span id="pitchVal">45°</span>
   </div>
+  <body>
+    <div id="map"></div>
+    <div class="hud">
+      <div class="chip" id="spd">0 km/h</div>
+      <div class="chip" id="brg">0°</div>
+    </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.12.0/dist/maplibre-gl.js"></script>
-  <script src="./app.js"></script>
-</body>
+    <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.12.0/dist/maplibre-gl.js"></script>
+    <script src="./app.js"></script>
+  </body>
 </html>

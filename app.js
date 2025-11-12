@@ -1,7 +1,7 @@
 // 1) 스타일 제공자 선택: MapTiler / Stadia / Mapbox(유료키) 중 택1
 // 아래는 MapTiler 예시(무료키 발급 후 교체)
 // 데모 말고 아래처럼 교체
-const MAP_STYLE ="https://api.maptiler.com/maps/streets-v2/style.json?key=2HioygjPVFKopzhBEhM3";  // buildings 포함
+const MAP_STYLE = "https://api.maptiler.com/maps/streets-v2/style.json?key=2HioygjPVFKopzhBEhM3";  // buildings 포함
 
 
 const map = new maplibregl.Map({
@@ -96,3 +96,48 @@ const onErr = (e) => {
     navigator.geolocation.getCurrentPosition(onPos, console.warn, { ...geoOpts, timeout: 45000 });
 };
 navigator.geolocation.watchPosition(onPos, onErr, geoOpts);
+
+
+function clamp(v, min, max) { return Math.min(max, Math.max(min, v)); }
+function setPitch(p) {
+    const val = clamp(p, 0, 85);
+    map.setPitch(val);                   // 성능상 setPitch가 가벼움
+    document.getElementById("pitchRange").value = String(Math.round(val));
+    document.getElementById("pitchVal").textContent = `${Math.round(val)}°`;
+}
+
+// 컨트롤 바인딩
+const pitchRange = document.getElementById("pitchRange");
+const pitchInc = document.getElementById("pitchInc");
+const pitchDec = document.getElementById("pitchDec");
+
+pitchRange.addEventListener("input", e => setPitch(+e.target.value));
+pitchInc.addEventListener("click", () => setPitch(map.getPitch() + 5));
+pitchDec.addEventListener("click", () => setPitch(map.getPitch() - 5));
+
+// 초기 동기화
+setPitch(map.getPitch());
+
+let twoTouch = null;
+map.getCanvas().addEventListener("touchstart", (e) => {
+    if (e.touches.length === 2) {
+        twoTouch = { y: (e.touches[0].clientY + e.touches[1].clientY) / 2, pitch: map.getPitch() };
+    }
+}, { passive: true });
+
+map.getCanvas().addEventListener("touchmove", (e) => {
+    if (twoTouch && e.touches.length === 2) {
+        const y = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        const dy = twoTouch.y - y;                 // 위로 올리면 dy>0 → 더 기울임
+        setPitch(twoTouch.pitch + dy * 0.1);       // 감도 0.1 조절
+    }
+}, { passive: true });
+
+map.getCanvas().addEventListener("touchend", () => {
+    twoTouch = null;
+});
+
+window.addEventListener("keydown", (e) => {
+    if (e.key === "[") setPitch(map.getPitch() - 5);
+    if (e.key === "]") setPitch(map.getPitch() + 5);
+});
