@@ -9,18 +9,27 @@
     />
     <title>3D Road + Buildings HUD</title>
     <style>
+      #map,
+      #map canvas {
+        touch-action: pan-x pan-y; /* 핀치/팬을 MapLibre로 전달 */
+      }
       html,
       body,
       #map {
         height: 100%;
         margin: 0;
-        overscroll-behavior: none; touch-action: none;
+        overscroll-behavior: none;
+        touch-action: none;
       }
       .hud {
         position: absolute;
         inset: auto 12px 12px 12px;
         display: flex;
         gap: 8px;
+        pointer-events: none;
+      }
+      .hud .controls {
+        pointer-events: auto;
       }
       .chip {
         background: #000a;

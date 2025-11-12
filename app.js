@@ -124,3 +124,27 @@ const onErr = (e) => {
     navigator.geolocation.getCurrentPosition(onPos, console.warn, { ...geoOpts, timeout: 45000 });
 };
 navigator.geolocation.watchPosition(onPos, onErr, geoOpts);
+
+function applyGesturePolicy() {
+    // 기본 제스처 전부 ON
+    map.dragPan.enable();
+    map.scrollZoom.enable();
+    map.doubleClickZoom.enable();
+    map.touchZoomRotate.enable();     // 핀치줌
+    // 북쪽고정이면 회전만 OFF, 나머진 유지
+    if (northUp) {
+        map.dragRotate.disable();
+        map.touchZoomRotate.disableRotation();
+    } else {
+        map.dragRotate.enable();
+        map.touchZoomRotate.enableRotation();
+    }
+}
+applyGesturePolicy();
+
+btnNorth.onclick = () => {
+    northUp = !northUp;
+    btnNorth.textContent = northUp ? "🚗 진행방향" : "N↑ 북쪽고정"; // 네비 스타일이면 진행방향
+    if (northUp) map.setBearing(0);
+    applyGesturePolicy();            // ← 여기 추가
+};
