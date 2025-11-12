@@ -141,3 +141,15 @@ window.addEventListener("keydown", (e) => {
     if (e.key === "[") setPitch(map.getPitch() - 5);
     if (e.key === "]") setPitch(map.getPitch() + 5);
 });
+
+function setZoom(z) {
+    const v = Math.max(12, Math.min(20, z));
+    map.setZoom(v);                    // jumpTo/setZoom가 가장 가벼움
+}
+
+map.getCanvas().addEventListener("touchend", (e) => {
+    // 제스처가 끝났는데 바로 직전에 2-터치였던 경우 간단히 감지
+    if (e.changedTouches.length === 2 && e.touches.length === 0) {
+        setZoom(map.getZoom() - 1);
+    }
+}, { passive: true });
