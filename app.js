@@ -20,12 +20,6 @@ map.keyboard.enable();                // 키보드
 map.boxZoom.enable();
 map.doubleClickZoom.enable();
 
-if (northUp) {
-    map.dragRotate.disable();
-    map.touchZoomRotate.enable();       // 핀치줌 OK
-    map.touchZoomRotate.disableRotation();
-}
-
 // === 사용자가 만지는 동안 자동 팔로우가 줌/피치 덮어쓰지 않게 ===
 let userInteracting = false;
 let _idleT;
@@ -118,6 +112,13 @@ const onPos = (pos) => {
     }
     map.easeTo(easeOpts);
 };
+
+if (northUp) {
+    map.dragRotate.disable();
+    map.touchZoomRotate.enable();       // 핀치줌 OK
+    map.touchZoomRotate.disableRotation();
+}
+
 const onErr = (e) => {
     console.warn("geo error", e);
     navigator.geolocation.getCurrentPosition(onPos, console.warn, { ...geoOpts, timeout: 45000 });
@@ -225,4 +226,3 @@ btnNorth.onclick = () => {
         map.touchZoomRotate.enableRotation();
     }
 };
-
