@@ -76,7 +76,7 @@ map.scrollZoom.enable();
 map.keyboard.enable();
 map.on("movestart", () => { userInteracting = true; clearTimeout(_idleT); });
 map.on("moveend", () => { clearTimeout(_idleT); _idleT = setTimeout(() => userInteracting = false, 1500); });
-map.on("rotateend", () => { if (northUp && map.getBearing() !== 0) map.easeTo({ bearing: 0, duration: 300 }); });
+map.on("rotateend", () => { if (!northUp && map.getBearing() !== 0) map.easeTo({ bearing: 0, duration: 300 }); });
 
 // === GeolocateControl ===
 const geolocate = new maplibregl.GeolocateControl({
@@ -112,7 +112,7 @@ const onPos = (pos) => {
 
     const easeOpts = {
         center,
-        bearing: northUp ? 0 : (heading ?? map.getBearing()),
+        bearing: northUp ? (heading ?? map.getBearing()) : 0,
         duration: 600,
     };
     if (!userInteracting) easeOpts.pitch = 60;
@@ -145,6 +145,5 @@ applyGesturePolicy();
 btnNorth.onclick = () => {
     northUp = !northUp;
     btnNorth.textContent = northUp ? "🚗 진행방향" : "N↑ 북쪽고정"; // 네비 스타일이면 진행방향
-    if (northUp) map.setBearing(0);
     applyGesturePolicy();            // ← 여기 추가
 };
