@@ -135,19 +135,38 @@ btnNorth.onclick = () => {
     applyGesturePolicy();            // ← 여기 추가
 };
 
-document.getElementById("q").addEventListener("keydown", async (e) => {
+const qInput = document.getElementById("q");
+
+async function doSearch() {
+    const q = qInput.value.trim();
+    if (!q) return;
+
+    const res = await fetch(
+        `https://api.maptiler.com/geocoding/${encodeURIComponent(q)}.json?key=2HioygjPVFKopzhBEhM3`
+    );
+    const data = await res.json();
+
+    if (data.features && data.features.length) {
+        const [lng, lat] = data.features[0].center;
+        map.easeTo({ center: [lng, lat], zoom: 16, duration: 800 });
+    } else {
+        alert("검색 결과 없음");
+    }
+}
+
+// 엔터 입력 막고, 우리 검색만 실행
+qInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
-        const q = e.target.value.trim();
-        if (!q) return;
-        const res = await fetch(
-            `https://api.maptiler.com/geocoding/${encodeURIComponent(q)}.json?key=2HioygjPVFKopzhBEhM3`
-        );
-        const data = await res.json();
-        if (data.features && data.features.length) {
-            const [lng, lat] = data.features[0].center;
-            map.easeTo({ center: [lng, lat], zoom: 16, duration: 800 });
-        } else {
-            alert("검색 결과 없음");
-        }
+        e.preventDefault();     // 기본 제출/네비게이션 막기
+        e.stopPropagation();    // 상위로 이벤트 안 올라가게
+        doSearch();
     }
 });
+
+// 혹시 폼 안에 들어갈 가능성까지 커버
+if (qInput.form) {
+    qInput.form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        doSearch();
+    });
+}
