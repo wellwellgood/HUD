@@ -4,10 +4,7 @@ let lastFix = null;    // 최근 위치 캐시
 let userInteracting = false;
 let _idleT;
 
-// === Naver Geocode REST API 키 ===
-// 콘솔 화면에 나온 값으로 교체
-const NAVER_CLIENT_ID = "i6my73bw6a";              // Client ID (X-NCP-APIGW-API-KEY-ID)
-const NAVER_CLIENT_SECRET = "wl3h5URAJOKAgcyE3qUda9mS5khNqZCV7ADqc01M";   // Client Secret (X-NCP-APIGW-API-KEY)
+// === 네이버 API 키 제거 (서버에서 처리) ===
 
 // === 지도 생성 ===
 const MAP_STYLE = "https://api.maptiler.com/maps/streets-v2/style.json?key=2HioygjPVFKopzhBEhM3";
@@ -118,12 +115,10 @@ const onErr = (e) => {
 navigator.geolocation.watchPosition(onPos, onErr, geoOpts);
 
 function applyGesturePolicy() {
-    // 기본 제스처 전부 ON
     map.dragPan.enable();
     map.scrollZoom.enable();
     map.doubleClickZoom.enable();
-    map.touchZoomRotate.enable();     // 핀치줌
-    // 북쪽고정이면 회전만 OFF, 나머진 유지
+    map.touchZoomRotate.enable();
     if (northUp) {
         map.dragRotate.disable();
         map.touchZoomRotate.disableRotation();
@@ -142,13 +137,13 @@ btnNorth.onclick = () => {
 
 const qInput = document.getElementById("q");
 
-// === 네이버 지오코딩으로 검색 ===
+// === 네이버 지오코딩으로 검색 (Netlify Function 사용) ===
 async function doSearch() {
     const q = qInput.value.trim();
     if (!q) return;
 
     try {
-        // ✅ 네이버가 아니라 "내 함수"로 호출
+        // Netlify Function 호출
         const res = await fetch(
             "/.netlify/functions/geocode?q=" + encodeURIComponent(q)
         );
@@ -180,6 +175,7 @@ async function doSearch() {
     }
 }
 
+// 엔터 키로 검색
 qInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
         e.preventDefault();
@@ -188,16 +184,7 @@ qInput.addEventListener("keydown", (e) => {
     }
 });
 
-// 엔터 입력 막고, 우리 검색만 실행
-qInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-        e.preventDefault();     // 기본 제출/네비게이션 막기
-        e.stopPropagation();    // 상위로 이벤트 안 올라가게
-        doSearch();
-    }
-});
-
-// 혹시 폼 안에 들어갈 가능성까지 커버
+// 폼 제출 방지
 if (qInput.form) {
     qInput.form.addEventListener("submit", (e) => {
         e.preventDefault();
