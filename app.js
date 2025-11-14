@@ -4,6 +4,11 @@ let lastFix = null;    // 최근 위치 캐시
 let userInteracting = false;
 let _idleT;
 
+// === Naver Geocode REST API 키 ===
+// 콘솔 화면에 나온 값으로 교체
+const NAVER_CLIENT_ID = "i6my73bw6a";              // Client ID (X-NCP-APIGW-API-KEY-ID)
+const NAVER_CLIENT_SECRET = "YOUR_NAVER_SECRET";   // Client Secret (X-NCP-APIGW-API-KEY)
+
 // === 지도 생성 ===
 const MAP_STYLE = "https://api.maptiler.com/maps/streets-v2/style.json?key=2HioygjPVFKopzhBEhM3";
 
@@ -131,26 +136,52 @@ applyGesturePolicy();
 
 btnNorth.onclick = () => {
     northUp = !northUp;
-    btnNorth.textContent = northUp ? "🚗 진행방향" : "N↑ 북쪽고정"; // 네비 스타일이면 진행방향
-    applyGesturePolicy();            // ← 여기 추가
+    btnNorth.textContent = northUp ? "N↑ 북쪽고정" : "🚗 진행방향";
+    applyGesturePolicy();
 };
 
 const qInput = document.getElementById("q");
 
+// === 네이버 지오코딩으로 검색 ===
 async function doSearch() {
     const q = qInput.value.trim();
     if (!q) return;
 
-    const res = await fetch(
-        `https://api.maptiler.com/geocoding/${encodeURIComponent(q)}.json?key=2HioygjPVFKopzhBEhM3`
-    );
-    const data = await res.json();
+    try {
+        const res = await fetch(
+            "https://naveropenapi.apigw.ntruss.com/map-geocode/v2/geocode?query=" + encodeURIComponent(q),
+            {
+                headers: {
+                    "X-NCP-APIGW-API-KEY-ID": NAVER_CLIENT_ID,
+                    "X-NCP-APIGW-API-KEY": NAVER_CLIENT_SECRET,
+                },
+            }
+        );
 
-    if (data.features && data.features.length) {
-        const [lng, lat] = data.features[0].center;
-        map.easeTo({ center: [lng, lat], zoom: 16, duration: 800 });
-    } else {
-        alert("검색 결과 없음");
+        if (!res.ok) {
+            console.error("Naver geocode error status:", res.status);
+            alert("네이버 검색 실패(" + res.status + ")");
+            return;
+        }
+
+        const data = await res.json();
+
+        if (data.addresses && data.addresses.length > 0) {
+            const { x, y } = data.addresses[0]; // x: 경도, y: 위도
+            const lng = Number(x);
+            const lat = Number(y);
+
+            map.easeTo({
+                center: [lng, lat],
+                zoom: 16,
+                duration: 800,
+            });
+        } else {
+            alert("검색 결과 없음");
+        }
+    } catch (e) {
+        console.error("Naver geocode fetch error:", e);
+        alert("검색 중 오류 발생");
     }
 }
 
