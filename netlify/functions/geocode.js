@@ -48,7 +48,7 @@ exports.handler = async (event, context) => {
         }
 
         const url =
-            "https://naveropenapi.apigw.ntruss.com/map-geocode/v2/geocode?query=" +
+            "https://maps.apigw.ntruss.com/map-geocode/v2/geocode?query=" +
             encodeURIComponent(q);
 
         // ✅ 헤더 이름을 소문자로 변경
