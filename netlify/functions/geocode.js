@@ -1,3 +1,5 @@
+// netlify/functions/geocode.js
+
 export async function handler(event) {
     try {
         const q = event.queryStringParameters?.q || "";
@@ -9,20 +11,20 @@ export async function handler(event) {
             };
         }
 
-        const NAVER_CLIENT_ID = process.env.NAVER_CLIENT_ID;
-        const NAVER_CLIENT_SECRET = process.env.NAVER_CLIENT_SECRET;
+        // 1) 환경변수 + 디버그 (필요하면 하드코딩 fallback도 추가)
+        const NAVER_CLIENT_ID =
+            process.env.NAVER_CLIENT_ID || "i6my73bw6a"; // <- 디버깅용: 네 Client ID
+        const NAVER_CLIENT_SECRET =
+            process.env.NAVER_CLIENT_SECRET || "wl3h5URAJOKAgcyE3qUda9mS5khNqZCV7ADqc01M";
 
-        // ✅ 1단계: 환경변수 체크
-        if (!NAVER_CLIENT_ID || !NAVER_CLIENT_SECRET) {
-            console.error("NAVER keys missing", {
-                hasId: !!NAVER_CLIENT_ID,
-                hasSecret: !!NAVER_CLIENT_SECRET,
-            });
-            return {
-                statusCode: 500,
-                body: JSON.stringify({ error: "NAVER keys not configured on server" }),
-            };
-        }
+        console.log("NAVER KEYS CHECK", {
+            hasId: !!process.env.NAVER_CLIENT_ID,
+            hasSecret: !!process.env.NAVER_CLIENT_SECRET,
+            idFromEnv: process.env.NAVER_CLIENT_ID,
+            secretLen: process.env.NAVER_CLIENT_SECRET
+                ? process.env.NAVER_CLIENT_SECRET.length
+                : 0,
+        });
 
         const url =
             "https://naveropenapi.apigw.ntruss.com/map-geocode/v2/geocode?query=" +
@@ -36,8 +38,6 @@ export async function handler(event) {
         });
 
         const text = await resp.text();
-
-        // ✅ 2단계: 네이버 응답 상태/본문 로깅
         console.log("Naver status:", resp.status, "body:", text);
 
         return {
