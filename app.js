@@ -148,19 +148,14 @@ async function doSearch() {
     if (!q) return;
 
     try {
+        // ✅ 네이버가 아니라 "내 함수"로 호출
         const res = await fetch(
-            "https://naveropenapi.apigw.ntruss.com/map-geocode/v2/geocode?query=" + encodeURIComponent(q),
-            {
-                headers: {
-                    "X-NCP-APIGW-API-KEY-ID": NAVER_CLIENT_ID,
-                    "X-NCP-APIGW-API-KEY": NAVER_CLIENT_SECRET,
-                },
-            }
+            "/.netlify/functions/geocode?q=" + encodeURIComponent(q)
         );
 
         if (!res.ok) {
-            console.error("Naver geocode error status:", res.status);
-            alert("네이버 검색 실패(" + res.status + ")");
+            console.error("geocode function error status:", res.status);
+            alert("검색 실패(" + res.status + ")");
             return;
         }
 
@@ -180,10 +175,18 @@ async function doSearch() {
             alert("검색 결과 없음");
         }
     } catch (e) {
-        console.error("Naver geocode fetch error:", e);
+        console.error("geocode fetch error:", e);
         alert("검색 중 오류 발생");
     }
 }
+
+qInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+        e.preventDefault();
+        e.stopPropagation();
+        doSearch();
+    }
+});
 
 // 엔터 입력 막고, 우리 검색만 실행
 qInput.addEventListener("keydown", (e) => {
