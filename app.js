@@ -7,7 +7,7 @@ let _idleT;
 // === Naver Geocode REST API 키 ===
 // 콘솔 화면에 나온 값으로 교체
 const NAVER_CLIENT_ID = "i6my73bw6a";              // Client ID (X-NCP-APIGW-API-KEY-ID)
-const NAVER_CLIENT_SECRET = "YOUR_NAVER_SECRET";   // Client Secret (X-NCP-APIGW-API-KEY)
+const NAVER_CLIENT_SECRET = "wl3h5URAJOKAgcyE3qUda9mS5khNqZCV7ADqc01M";   // Client Secret (X-NCP-APIGW-API-KEY)
 
 // === 지도 생성 ===
 const MAP_STYLE = "https://api.maptiler.com/maps/streets-v2/style.json?key=2HioygjPVFKopzhBEhM3";
