@@ -1,20 +1,29 @@
 // netlify/functions/geocode.js
 
-exports.handler = async (event) => {
-    // CORS 헤더 (모든 응답에 공통 적용)
+exports.handler = async (event, context) => {
+    // CORS 헤더 - 모든 응답에 포함
     const headers = {
-        "Content-Type": "application/json; charset=utf-8",
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "Content-Type",
-        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, X-Requested-With",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Content-Type": "application/json; charset=utf-8",
     };
 
-    // OPTIONS 요청 처리 (CORS preflight)
+    // OPTIONS 요청 (CORS preflight) 처리
     if (event.httpMethod === "OPTIONS") {
         return {
-            statusCode: 200,
+            statusCode: 204,
             headers,
             body: "",
+        };
+    }
+
+    // GET 요청만 허용
+    if (event.httpMethod !== "GET") {
+        return {
+            statusCode: 405,
+            headers,
+            body: JSON.stringify({ error: "Method not allowed" }),
         };
     }
 
@@ -29,17 +38,13 @@ exports.handler = async (event) => {
             };
         }
 
-        // 환경변수에서 API 키 가져오기 (없으면 하드코딩된 값 사용)
+        // 환경변수에서 API 키 가져오기
         const NAVER_CLIENT_ID =
             process.env.NAVER_CLIENT_ID || "i6my73bw6a";
         const NAVER_CLIENT_SECRET =
             process.env.NAVER_CLIENT_SECRET || "wl3h5URAJOKAgcyE3qUda9mS5khNqZCV7ADqc01M";
 
-        // 환경변수 확인 로그 (디버깅용)
-        console.log("NAVER KEYS CHECK:", {
-            hasId: !!process.env.NAVER_CLIENT_ID,
-            hasSecret: !!process.env.NAVER_CLIENT_SECRET,
-        });
+        console.log("Geocoding request:", { query: q });
 
         // 네이버 Geocoding API 호출
         const url =
@@ -47,35 +52,34 @@ exports.handler = async (event) => {
             encodeURIComponent(q);
 
         const resp = await fetch(url, {
+            method: "GET",
             headers: {
                 "X-NCP-APIGW-API-KEY-ID": NAVER_CLIENT_ID,
                 "X-NCP-APIGW-API-KEY": NAVER_CLIENT_SECRET,
             },
         });
 
-        const text = await resp.text();
-
-        // 네이버 API 응답 로그
+        const data = await resp.text();
+        
         console.log("Naver API Response:", {
             status: resp.status,
-            bodyLength: text.length,
-            query: q,
+            ok: resp.ok,
         });
 
-        // 네이버 API 응답을 그대로 클라이언트에 전달
+        // 네이버 API가 에러를 반환해도 CORS 헤더는 포함해야 함
         return {
-            statusCode: resp.status,
+            statusCode: resp.ok ? 200 : resp.status,
             headers,
-            body: text,
+            body: data,
         };
     } catch (e) {
-        console.error("geocode function error:", e);
+        console.error("Geocode function error:", e);
         return {
             statusCode: 500,
             headers,
-            body: JSON.stringify({
-                error: "internal error",
-                message: e.message
+            body: JSON.stringify({ 
+                error: "Internal server error",
+                message: e.message 
             }),
         };
     }
