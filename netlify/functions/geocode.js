@@ -7,26 +7,7 @@ exports.handler = async (event, context) => {
         "Content-Type": "application/json; charset=utf-8",
     };
 
-    // 여기서 env 제대로 읽히는지 로그 찍기
-    const NAVER_CLIENT_ID = process.env.NAVER_CLIENT_ID;
-    const NAVER_CLIENT_SECRET = process.env.NAVER_CLIENT_SECRET;
-
-    console.log("NAVER_ENV_CHECK", {
-        hasId: !!NAVER_CLIENT_ID,
-        hasSecret: !!NAVER_CLIENT_SECRET,
-        idSample: NAVER_CLIENT_ID ? NAVER_CLIENT_ID.slice(0, 4) : null,
-        secretLen: NAVER_CLIENT_SECRET ? NAVER_CLIENT_SECRET.length : 0,
-    });
-
-    if (!NAVER_CLIENT_ID || !NAVER_CLIENT_SECRET) {
-        return {
-            statusCode: 500,
-            headers,
-            body: JSON.stringify({ error: "NAVER keys not configured" }),
-        };
-    }
-
-    // 이하 기존 로직
+    // OPTIONS 요청 (CORS preflight) 처리
     if (event.httpMethod === "OPTIONS") {
         return { statusCode: 204, headers, body: "" };
     }
@@ -36,6 +17,23 @@ exports.handler = async (event, context) => {
             statusCode: 405,
             headers,
             body: JSON.stringify({ error: "Method not allowed" }),
+        };
+    }
+
+    // 환경변수에서 API 키 가져오기
+    const NAVER_CLIENT_ID = process.env.NAVER_CLIENT_ID;
+    const NAVER_CLIENT_SECRET = process.env.NAVER_CLIENT_SECRET;
+
+    console.log("NAVER_ENV_CHECK", {
+        hasId: !!NAVER_CLIENT_ID,
+        hasSecret: !!NAVER_CLIENT_SECRET,
+    });
+
+    if (!NAVER_CLIENT_ID || !NAVER_CLIENT_SECRET) {
+        return {
+            statusCode: 500,
+            headers,
+            body: JSON.stringify({ error: "NAVER API keys not configured" }),
         };
     }
 
@@ -53,14 +51,22 @@ exports.handler = async (event, context) => {
             "https://naveropenapi.apigw.ntruss.com/map-geocode/v2/geocode?query=" +
             encodeURIComponent(q);
 
+        // ✅ 헤더 이름을 소문자로 변경
         const resp = await fetch(url, {
+            method: "GET",
             headers: {
-                "X-NCP-APIGW-API-KEY-ID": NAVER_CLIENT_ID,
-                "X-NCP-APIGW-API-KEY": NAVER_CLIENT_SECRET,
+                "x-ncp-apigw-api-key-id": NAVER_CLIENT_ID,
+                "x-ncp-apigw-api-key": NAVER_CLIENT_SECRET,
             },
         });
 
         const text = await resp.text();
+
+        console.log("Naver API Response:", {
+            status: resp.status,
+            ok: resp.ok,
+            query: q,
+        });
 
         return {
             statusCode: resp.status,
@@ -72,7 +78,7 @@ exports.handler = async (event, context) => {
         return {
             statusCode: 500,
             headers,
-            body: JSON.stringify({ error: "internal error" }),
+            body: JSON.stringify({ error: "internal error", message: e.message }),
         };
     }
 };
