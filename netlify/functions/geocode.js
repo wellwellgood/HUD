@@ -9,6 +9,14 @@ exports.handler = async (event, context) => {
         "Content-Type": "application/json; charset=utf-8",
     };
 
+    console.log("NAVER_ENV_CHECK", {
+        hasId: !!NAVER_CLIENT_ID,
+        hasSecret: !!NAVER_CLIENT_SECRET,
+        idSample: NAVER_CLIENT_ID?.slice(0, 4),
+        secretLen: NAVER_CLIENT_SECRET?.length ?? 0,
+    });
+
+
     // OPTIONS 요청 (CORS preflight) 처리
     if (event.httpMethod === "OPTIONS") {
         return {
@@ -60,7 +68,7 @@ exports.handler = async (event, context) => {
         });
 
         const data = await resp.text();
-        
+
         console.log("Naver API Response:", {
             status: resp.status,
             ok: resp.ok,
@@ -77,10 +85,11 @@ exports.handler = async (event, context) => {
         return {
             statusCode: 500,
             headers,
-            body: JSON.stringify({ 
+            body: JSON.stringify({
                 error: "Internal server error",
-                message: e.message 
+                message: e.message
             }),
         };
     }
+
 };
