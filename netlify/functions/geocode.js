@@ -9,15 +9,20 @@ exports.handler = async (event, context) => {
         "Content-Type": "application/json; charset=utf-8",
     };
 
+    // 1) 환경변수에서 API 키 가져오기 (없으면 테스트용 하드코드)
+    const NAVER_CLIENT_ID =
+        process.env.NAVER_CLIENT_ID || "i6my73bw6a";
+    const NAVER_CLIENT_SECRET =
+        process.env.NAVER_CLIENT_SECRET || "wl3h5URAJOKAgcyE3qUda9mS5khNqZCV7ADqc01M";
+
     console.log("NAVER_ENV_CHECK", {
-        hasId: !!NAVER_CLIENT_ID,
-        hasSecret: !!NAVER_CLIENT_SECRET,
-        idSample: NAVER_CLIENT_ID?.slice(0, 4),
-        secretLen: NAVER_CLIENT_SECRET?.length ?? 0,
+        hasId: !!process.env.NAVER_CLIENT_ID,
+        hasSecret: !!process.env.NAVER_CLIENT_SECRET,
+        idSample: NAVER_CLIENT_ID.slice(0, 4),
+        secretLen: NAVER_CLIENT_SECRET.length,
     });
 
-
-    // OPTIONS 요청 (CORS preflight) 처리
+    // 2) OPTIONS 요청 (CORS preflight) 처리
     if (event.httpMethod === "OPTIONS") {
         return {
             statusCode: 204,
@@ -26,7 +31,7 @@ exports.handler = async (event, context) => {
         };
     }
 
-    // GET 요청만 허용
+    // 3) GET 요청만 허용
     if (event.httpMethod !== "GET") {
         return {
             statusCode: 405,
@@ -46,15 +51,8 @@ exports.handler = async (event, context) => {
             };
         }
 
-        // 환경변수에서 API 키 가져오기
-        const NAVER_CLIENT_ID =
-            process.env.NAVER_CLIENT_ID || "i6my73bw6a";
-        const NAVER_CLIENT_SECRET =
-            process.env.NAVER_CLIENT_SECRET || "wl3h5URAJOKAgcyE3qUda9mS5khNqZCV7ADqc01M";
-
         console.log("Geocoding request:", { query: q });
 
-        // 네이버 Geocoding API 호출
         const url =
             "https://naveropenapi.apigw.ntruss.com/map-geocode/v2/geocode?query=" +
             encodeURIComponent(q);
@@ -74,7 +72,6 @@ exports.handler = async (event, context) => {
             ok: resp.ok,
         });
 
-        // 네이버 API가 에러를 반환해도 CORS 헤더는 포함해야 함
         return {
             statusCode: resp.ok ? 200 : resp.status,
             headers,
@@ -87,9 +84,8 @@ exports.handler = async (event, context) => {
             headers,
             body: JSON.stringify({
                 error: "Internal server error",
-                message: e.message
+                message: e.message,
             }),
         };
     }
-
 };
