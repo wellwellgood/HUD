@@ -57,6 +57,7 @@ exports.handler = async (event, context) => {
             headers: {
                 "x-ncp-apigw-api-key-id": NAVER_CLIENT_ID,
                 "x-ncp-apigw-api-key": NAVER_CLIENT_SECRET,
+                "Accept": "application/json",
             },
         });
 
