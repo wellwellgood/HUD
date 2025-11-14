@@ -7,15 +7,18 @@ exports.handler = async (event, context) => {
         "Content-Type": "application/json; charset=utf-8",
     };
 
-    // 1) 환경변수에서만 키 읽기 (하드코딩 X)
+    // 여기서 env 제대로 읽히는지 로그 찍기
     const NAVER_CLIENT_ID = process.env.NAVER_CLIENT_ID;
     const NAVER_CLIENT_SECRET = process.env.NAVER_CLIENT_SECRET;
 
+    console.log("NAVER_ENV_CHECK", {
+        hasId: !!NAVER_CLIENT_ID,
+        hasSecret: !!NAVER_CLIENT_SECRET,
+        idSample: NAVER_CLIENT_ID ? NAVER_CLIENT_ID.slice(0, 4) : null,
+        secretLen: NAVER_CLIENT_SECRET ? NAVER_CLIENT_SECRET.length : 0,
+    });
+
     if (!NAVER_CLIENT_ID || !NAVER_CLIENT_SECRET) {
-        console.error("NAVER keys missing", {
-            hasId: !!NAVER_CLIENT_ID,
-            hasSecret: !!NAVER_CLIENT_SECRET,
-        });
         return {
             statusCode: 500,
             headers,
