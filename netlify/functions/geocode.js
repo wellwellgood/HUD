@@ -11,9 +11,9 @@ exports.handler = async (event, context) => {
 
     // 1) 환경변수에서 API 키 가져오기 (없으면 테스트용 하드코드)
     const NAVER_CLIENT_ID =
-        process.env.NAVER_CLIENT_ID || "i6my73bw6a";
+        process.env.NAVER_CLIENT_ID || "k088fbm2t0";
     const NAVER_CLIENT_SECRET =
-        process.env.NAVER_CLIENT_SECRET || "wl3h5URAJOKAgcyE3qUda9mS5khNqZCV7ADqc01M";
+        process.env.NAVER_CLIENT_SECRET || "oj9BcOtfirGkTfFQrrUxvWS9oFcFCMVnc1uuSrxx";
 
     console.log("NAVER_ENV_CHECK", {
         hasId: !!process.env.NAVER_CLIENT_ID,
