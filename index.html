@@ -1,106 +1,118 @@
 <!DOCTYPE html>
 <html lang="ko">
   <head>
-    <meta charset="utf-8" />
+    <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width,initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
     />
-    <link
-      href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.12.0/dist/maplibre-gl.css"
-      rel="stylesheet"
-    />
-    <title>3D Road + Buildings HUD</title>
+    <title>HUD + Map</title>
+
     <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background: #000;
+        color: #0ff;
+        font-family: ui-monospace, monospace;
+      }
+
+      #map {
+        position: fixed;
+        inset: 0;
+      }
+
+      /* 검색 박스 */
       #searchBox {
         position: fixed;
         left: calc(env(safe-area-inset-left, 0px) + 12px);
         top: calc(env(safe-area-inset-top, 0px) + 12px);
-        z-index: 1000;
+        z-index: 2000;
+      }
+      #searchBox input {
+        padding: 6px 12px;
+        border-radius: 8px;
+        border: 1px solid #2dd4bf;
+        background: rgba(0, 0, 0, 0.6);
+        color: #0ff;
       }
 
-      html,
-      body {
-        height: 100%;
-        margin: 0;
-        overscroll-behavior: none;
-      }
-      #map {
-        position: fixed; /* 또는 absolute */
-        inset: 0; /* top:0; right:0; bottom:0; left:0 */
-      }
-      #map,
-      #map canvas {
-        touch-action: pan-x pan-y;
-      }
-      html,
-      body {
-        height: 100%;
-        margin: 0;
-        overscroll-behavior: none;
-        touch-action: none;
-      }
+      /* 속도/방향 HUD */
       .hud {
         position: fixed;
         left: calc(env(safe-area-inset-left, 0px) + 12px);
-        bottom: calc(
-          env(safe-area-inset-bottom, 0px) + 60px
-        ); /* 아래 버튼 안 가리게 */
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 80px);
+        z-index: 2000;
         display: flex;
         gap: 8px;
         pointer-events: none;
       }
-      .hud .controls {
-        pointer-events: auto;
-      }
       .chip {
-        background: #000a;
+        pointer-events: auto;
+        padding: 6px 10px;
+        background: rgba(0, 0, 0, 0.6);
         color: #0ff;
-        padding: 8px 12px;
         border-radius: 8px;
-        font: 600 12px ui-monospace, monospace;
+        border: 1px solid #2dd4bf;
+      }
+
+      /* Pitch Control (#ctrl1) → body 안으로 이동 + z-index 낮춤 */
+      #ctrl1 {
+        position: fixed;
+        right: calc(env(safe-area-inset-right, 0px) + 12px);
+        top: calc(env(safe-area-inset-top, 0px) + 50px);
+        display: flex;
+        gap: 8px;
+        background: rgba(0, 0, 0, 0.55);
+        color: #0ff;
+        padding: 6px 12px;
+        border-radius: 8px;
+        z-index: 500; /* 버튼보다 아래 */
+      }
+      #ctrl1 button {
+        background: rgba(0, 0, 0, 0.7);
+        padding: 4px 8px;
+        border: 1px solid #2dd4bf;
+        color: #0ff;
+        border-radius: 6px;
       }
     </style>
   </head>
-  <div
-    id="ctrl"
-    style="
-      position: absolute;
-      right: 12px;
-      bottom: 12px;
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      background: #000a;
-      color: #0ff;
-      padding: 8px 12px;
-      border-radius: 8px;
-      font: 600 12px ui-monospace, monospace;
-    "
-  >
-    <button id="pitchDec">−</button>
-    <input id="pitchRange" type="range" min="0" max="85" step="1" value="45" />
-    <button id="pitchInc">+</button>
-    <span id="pitchVal">45°</span>
-  </div>
+
   <body>
+    <!-- 지도 -->
     <div id="map"></div>
-    <div
-      id="searchBox"
-      style="position: absolute; left: 12px; top: 12px; z-index: 10"
-    >
-      <input
-        id="q"
-        placeholder="장소 검색…"
-        style="padding: 6px 10px; width: 180px"
-      />
+
+    <!-- 검색 UI -->
+    <div id="searchBox">
+      <input id="q" placeholder="장소 검색…" />
     </div>
+
+    <!-- 속도/방향 HUD -->
     <div class="hud">
       <div class="chip" id="spd">0 km/h</div>
       <div class="chip" id="brg">0°</div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.12.0/dist/maplibre-gl.js"></script>
-    <script src="./app.js"></script>
+    <!-- 📌 Pitch 컨트롤 (body 안으로 이동 완료) -->
+    <div id="ctrl1">
+      <button id="pitchDec">−</button>
+      <input
+        id="pitchRange"
+        type="range"
+        min="0"
+        max="85"
+        step="1"
+        value="45"
+      />
+      <button id="pitchInc">+</button>
+      <span id="pitchVal">45°</span>
+    </div>
+
+    <!-- 앱 코드 -->
+    <script src="app.js"></script>
   </body>
 </html>
