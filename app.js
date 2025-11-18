@@ -3,8 +3,7 @@ let northUp = true;    // 북쪽 고정 기본값
 let lastFix = null;    // 최근 위치 캐시
 let userInteracting = false;
 let _idleT;
-
-// === 네이버 API 키 제거 (서버에서 처리) ===
+let followGps = true;   // 지도 중심을 GPS에 맞춰 자동 이동할지 여부
 
 // === 지도 생성 ===
 const MAP_STYLE = "https://api.maptiler.com/maps/streets-v2/style.json?key=2HioygjPVFKopzhBEhM3";
@@ -95,6 +94,9 @@ const onPos = (pos) => {
     const center = [longitude, latitude];
     lastFix = center;
 
+    if (!followGps) return;
+
+
     marker.setLngLat(center);
     if (spdEl) spdEl.textContent = `${toKmH(speed)} km/h`;
     if (brgEl) brgEl.textContent = `${Math.round(clampBearing(heading ?? 0))}°`;
@@ -161,6 +163,9 @@ async function doSearch() {
             const lng = Number(place.x);
             const lat = Number(place.y);
 
+            followGps = false;
+            userInteracting = true;
+
             map.easeTo({
                 center: [lng, lat],
                 zoom: 16,
@@ -190,4 +195,25 @@ if (qInput.form) {
         e.preventDefault();
         doSearch();
     });
+}
+
+// 버튼으로 유저 위치 찾기
+btnLocate.onclick = () => {
+    
+    followGps = false;
+    userInteracting = true;
+
+    if (lastFix) {
+        map.easeTo({ center: lastfix, duration: 600, zoom: Math.max(16, map.getzoom()) });
+    } else {
+        navigate.geolocation.getCurrentPosition(
+            (p) => {
+                const c = [p.coords.longitude, p.coords.latitude];
+                lastfix = c;
+                map.elseTo({ center: c, duration: 600, zoom: Math.max(16, map.getzoom()) });
+            },
+            console.warn,
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
+        );
+    };
 }
