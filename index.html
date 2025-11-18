@@ -1,12 +1,18 @@
 <!DOCTYPE html>
 <html lang="ko">
   <head>
-    <meta charset="UTF-8" />
+    <meta charset="utf-8" />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
     />
-    <title>HUD + Map</title>
+    <title>HUD Navi</title>
+
+    <!-- MapLibre 스타일 -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.12.0/dist/maplibre-gl.css"
+      rel="stylesheet"
+    />
 
     <style>
       html,
@@ -17,12 +23,13 @@
         overflow: hidden;
         background: #000;
         color: #0ff;
-        font-family: ui-monospace, monospace;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       }
 
+      /* 전체 지도 */
       #map {
         position: fixed;
-        inset: 0;
+        inset: 0; /* top:0; right:0; bottom:0; left:0 */
       }
 
       /* 검색 박스 */
@@ -38,6 +45,7 @@
         border: 1px solid #2dd4bf;
         background: rgba(0, 0, 0, 0.6);
         color: #0ff;
+        min-width: 180px;
       }
 
       /* 속도/방향 HUD */
@@ -57,27 +65,33 @@
         color: #0ff;
         border-radius: 8px;
         border: 1px solid #2dd4bf;
+        font-size: 12px;
       }
 
-      /* Pitch Control (#ctrl1) → body 안으로 이동 + z-index 낮춤 */
-      #ctrl1 {
+      /* Pitch 컨트롤 (#ctrl) - body 안 + z-index 낮게 */
+      #ctrl {
         position: fixed;
         right: calc(env(safe-area-inset-right, 0px) + 12px);
-        top: calc(env(safe-area-inset-top, 0px) + 50px);
+        top: calc(env(safe-area-inset-top, 0px) + 60px);
         display: flex;
         gap: 8px;
+        align-items: center;
         background: rgba(0, 0, 0, 0.55);
         color: #0ff;
-        padding: 6px 12px;
+        padding: 6px 10px;
         border-radius: 8px;
-        z-index: 500; /* 버튼보다 아래 */
+        font: 600 12px ui-monospace, monospace;
+        z-index: 500; /* 위치/북쪽 고정 버튼보다 아래 */
       }
-      #ctrl1 button {
+      #ctrl button {
         background: rgba(0, 0, 0, 0.7);
         padding: 4px 8px;
         border: 1px solid #2dd4bf;
         color: #0ff;
         border-radius: 6px;
+      }
+      #ctrl input[type="range"] {
+        accent-color: #0ff;
       }
     </style>
   </head>
@@ -97,22 +111,9 @@
       <div class="chip" id="brg">0°</div>
     </div>
 
-    <!-- 📌 Pitch 컨트롤 (body 안으로 이동 완료) -->
-    <div id="ctrl1">
-      <button id="pitchDec">−</button>
-      <input
-        id="pitchRange"
-        type="range"
-        min="0"
-        max="85"
-        step="1"
-        value="45"
-      />
-      <button id="pitchInc">+</button>
-      <span id="pitchVal">45°</span>
-    </div>
-
-    <!-- 앱 코드 -->
-    <script src="app.js"></script>
+    <!-- MapLibre 스크립트 (이거 없으면 maplibregl undefined) -->
+    <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.12.0/dist/maplibre-gl.js"></script>
+    <!-- 너가 만든 HUD+네비 로직 -->
+    <script src="./app.js"></script>
   </body>
 </html>
