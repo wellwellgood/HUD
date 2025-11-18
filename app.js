@@ -23,7 +23,7 @@ const ctl = document.createElement("div");
 ctl.style.cssText = `
   position: fixed;
   right: calc(env(safe-area-inset-right, 0px) + 12px);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 80px);
   z-index: 9999;
   display: flex;
   gap: 8px;
@@ -36,7 +36,7 @@ const mkBtn = (t) => {
       padding: 8px 10px;
       border: 1px solid #2dd4bf;
       border-radius: 999px;
-      background: rgba(0,0,0,.75);
+      background: rgba(0,0,0,.7);
       color: #0ff;
       font: 600 13px ui-monospace;
       box-shadow: 0 4px 12px rgba(0,0,0,.6);
