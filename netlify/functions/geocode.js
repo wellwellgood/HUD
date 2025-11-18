@@ -7,7 +7,6 @@ exports.handler = async (event, context) => {
         "Content-Type": "application/json; charset=utf-8",
     };
 
-    // OPTIONS 요청 (CORS preflight) 처리
     if (event.httpMethod === "OPTIONS") {
         return { statusCode: 204, headers, body: "" };
     }
@@ -20,20 +19,13 @@ exports.handler = async (event, context) => {
         };
     }
 
-    // 환경변수에서 API 키 가져오기
-    const NAVER_CLIENT_ID = process.env.NAVER_CLIENT_ID;
-    const NAVER_CLIENT_SECRET = process.env.NAVER_CLIENT_SECRET;
+    const KAKAO_REST_API_KEY = process.env.KAKAO_REST_API_KEY;
 
-    console.log("NAVER_ENV_CHECK", {
-        hasId: !!NAVER_CLIENT_ID,
-        hasSecret: !!NAVER_CLIENT_SECRET,
-    });
-
-    if (!NAVER_CLIENT_ID || !NAVER_CLIENT_SECRET) {
+    if (!KAKAO_REST_API_KEY) {
         return {
             statusCode: 500,
             headers,
-            body: JSON.stringify({ error: "NAVER API keys not configured" }),
+            body: JSON.stringify({ error: "KAKAO REST API KEY missing" }),
         };
     }
 
@@ -47,27 +39,20 @@ exports.handler = async (event, context) => {
             };
         }
 
+        // 카카오 키워드 검색 API
         const url =
-            "https://maps.apigw.ntruss.com/map-geocode/v2/geocode?query=" +
+            "https://dapi.kakao.com/v2/local/search/keyword.json?query=" +
             encodeURIComponent(q);
 
-        // ✅ 헤더 이름을 소문자로 변경
         const resp = await fetch(url, {
             method: "GET",
             headers: {
-                "x-ncp-apigw-api-key-id": NAVER_CLIENT_ID,
-                "x-ncp-apigw-api-key": NAVER_CLIENT_SECRET,
-                "Accept": "application/json",
+                Authorization: `KakaoAK ${KAKAO_REST_API_KEY}`,
+                Accept: "application/json",
             },
         });
 
         const text = await resp.text();
-
-        console.log("Naver API Response:", {
-            status: resp.status,
-            ok: resp.ok,
-            query: q,
-        });
 
         return {
             statusCode: resp.status,
@@ -75,7 +60,7 @@ exports.handler = async (event, context) => {
             body: text,
         };
     } catch (e) {
-        console.error("Geocode function error:", e);
+        console.error("Kakao search error:", e);
         return {
             statusCode: 500,
             headers,

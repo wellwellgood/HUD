@@ -137,13 +137,12 @@ btnNorth.onclick = () => {
 
 const qInput = document.getElementById("q");
 
-// === 네이버 지오코딩으로 검색 (Netlify Function 사용) ===
+// === 카카오 API로 검색 (Netlify Function 사용) ===
 async function doSearch() {
     const q = qInput.value.trim();
     if (!q) return;
 
     try {
-        // Netlify Function 호출
         const res = await fetch(
             "/.netlify/functions/geocode?q=" + encodeURIComponent(q)
         );
@@ -156,10 +155,11 @@ async function doSearch() {
 
         const data = await res.json();
 
-        if (data.addresses && data.addresses.length > 0) {
-            const { x, y } = data.addresses[0]; // x: 경도, y: 위도
-            const lng = Number(x);
-            const lat = Number(y);
+        // 🔥 카카오 검색 구조: data.documents
+        if (data.documents && data.documents.length > 0) {
+            const place = data.documents[0];
+            const lng = Number(place.x);
+            const lat = Number(place.y);
 
             map.easeTo({
                 center: [lng, lat],
