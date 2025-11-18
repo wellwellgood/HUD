@@ -21,38 +21,33 @@ map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-
 // === 위치버튼 + 북쪽고정버튼 ===
 const ctl = document.createElement("div");
 ctl.style.cssText = `
-  position:absolute; right:12px; bottom:12px; z-index:10;
-  display:flex; gap:8px; pointer-events:auto;
+  position: fixed;
+  right: calc(env(safe-area-inset-right, 0px) + 12px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  z-index: 9999;
+  display: flex;
+  gap: 8px;
+  pointer-events: auto;
 `;
 const mkBtn = (t) => {
     const b = document.createElement("button");
     b.textContent = t;
     b.style.cssText = `
-    padding:8px 10px; border:1px solid #2dd4bf; border-radius:8px;
-    background:rgba(0,0,0,.6); color:#0ff; font:600 13px ui-monospace;
-  `;
+      padding: 8px 10px;
+      border: 1px solid #2dd4bf;
+      border-radius: 999px;
+      background: rgba(0,0,0,.75);
+      color: #0ff;
+      font: 600 13px ui-monospace;
+      box-shadow: 0 4px 12px rgba(0,0,0,.6);
+      backdrop-filter: blur(8px);
+    `;
     return b;
 };
 const btnLocate = mkBtn("📍 현위치");
 const btnNorth = mkBtn("N↑ 북쪽고정");
 ctl.append(btnLocate, btnNorth);
 document.body.appendChild(ctl);
-
-btnLocate.onclick = () => {
-    if (lastFix) {
-        map.easeTo({ center: lastFix, duration: 600, zoom: Math.max(16, map.getZoom()) });
-    } else {
-        navigator.geolocation.getCurrentPosition(
-            (p) => {
-                const c = [p.coords.longitude, p.coords.latitude];
-                lastFix = c;
-                map.easeTo({ center: c, duration: 600, zoom: Math.max(16, map.getZoom()) });
-            },
-            console.warn,
-            { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
-        );
-    }
-};
 
 // === 제스처 및 사용자 상태 감지 ===
 map.dragRotate.enable();
@@ -199,21 +194,29 @@ if (qInput.form) {
 
 // 버튼으로 유저 위치 찾기
 btnLocate.onclick = () => {
-    
-    followGps = false;
-    userInteracting = true;
+    followGps = true;
+    userInteracting = false;
 
     if (lastFix) {
-        map.easeTo({ center: lastfix, duration: 600, zoom: Math.max(16, map.getzoom()) });
+        map.easeTo({
+            center: lastFix,
+            duration: 600,
+            zoom: Math.max(16, map.getZoom()),
+        });
     } else {
-        navigate.geolocation.getCurrentPosition(
+        navigator.geolocation.getCurrentPosition(
             (p) => {
                 const c = [p.coords.longitude, p.coords.latitude];
-                lastfix = c;
-                map.elseTo({ center: c, duration: 600, zoom: Math.max(16, map.getzoom()) });
+                lastFix = c;
+
+                map.easeTo({
+                    center: c,
+                    duration: 600,
+                    zoom: Math.max(16, map.getZoom()),
+                });
             },
             console.warn,
             { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
         );
-    };
-}
+    }
+};
