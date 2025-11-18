@@ -47,6 +47,47 @@
         border-radius: 8px;
         font: 600 12px ui-monospace, monospace;
       }
+
+      @media (max-height: 767px) {
+        html,
+        body {
+          height: 100%;
+          margin: 0;
+          overscroll-behavior: none;
+        }
+        #map {
+          position: fixed; /* 또는 absolute */
+          inset: 0; /* top:0; right:0; bottom:0; left:0 */
+        }
+        #map,
+        #map canvas {
+          touch-action: pan-x pan-y;
+        }
+        html,
+        body {
+          height: 100%;
+          margin: 0;
+          overscroll-behavior: none;
+          touch-action: none;
+        }
+        .hud {
+          position: absolute;
+          inset: auto 12px 12px 12px;
+          display: flex;
+          gap: 8px;
+          pointer-events: none;
+        }
+        .hud .controls {
+          pointer-events: auto;
+        }
+        .chip {
+          background: #000a;
+          color: #0ff;
+          padding: 8px 12px;
+          border-radius: 8px;
+          font: 600 12px ui-monospace, monospace;
+        }
+      }
     </style>
   </head>
   <div
