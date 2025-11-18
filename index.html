@@ -2,13 +2,23 @@
 <html lang="ko">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
     <link
       href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.12.0/dist/maplibre-gl.css"
       rel="stylesheet"
     />
     <title>3D Road + Buildings HUD</title>
     <style>
+      #searchBox {
+        position: fixed;
+        left: calc(env(safe-area-inset-left, 0px) + 12px);
+        top: calc(env(safe-area-inset-top, 0px) + 12px);
+        z-index: 1000;
+      }
+
       html,
       body {
         height: 100%;
@@ -31,8 +41,11 @@
         touch-action: none;
       }
       .hud {
-        position: absolute;
-        inset: auto 12px 12px 12px;
+        position: fixed;
+        left: calc(env(safe-area-inset-left, 0px) + 12px);
+        bottom: calc(
+          env(safe-area-inset-bottom, 0px) + 60px
+        ); /* 아래 버튼 안 가리게 */
         display: flex;
         gap: 8px;
         pointer-events: none;
@@ -49,43 +62,12 @@
       }
 
       @media (max-height: 767px) {
-        html,
-        body {
-          height: 100%;
-          margin: 0;
-          overscroll-behavior: none;
-        }
-        #map {
-          position: fixed; /* 또는 absolute */
-          inset: 0; /* top:0; right:0; bottom:0; left:0 */
-        }
-        #map,
-        #map canvas {
-          touch-action: pan-x pan-y;
-        }
-        html,
-        body {
-          height: 100%;
-          margin: 0;
-          overscroll-behavior: none;
-          touch-action: none;
-        }
-        .hud {
-          position: absolute;
-          inset: auto 12px 12px 12px;
-          display: flex;
-          gap: 8px;
-          pointer-events: none;
-        }
-        .hud .controls {
-          pointer-events: auto;
+        #searchBox input {
+          width: 140px;
         }
         .chip {
-          background: #000a;
-          color: #0ff;
-          padding: 8px 12px;
-          border-radius: 8px;
-          font: 600 12px ui-monospace, monospace;
+          font-size: 11px;
+          padding: 6px 8px;
         }
       }
     </style>
