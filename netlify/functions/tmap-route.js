@@ -56,24 +56,10 @@ exports.handler = async (event, context) => {
             endY: ey,
             reqCoordType: "WGS84GEO",
             resCoordType: "WGS84GEO",
-            searchOption: "0",   // 0=빠른길, 1=무료도로, 2=최단거리, 4=고속도로 우선 등
-            trafficInfo: "Y",     // "Y" 하면 교통정보 포함(경로 형태 달라짐)
-            directionOption: 1,
-            tollgateFareOption: 16,
-            roadType: 32,
-            endRpFlag: G,
-            gpsTime: 20191125153000,
-            speed: 10,
-            uncetaintyP: 1,
-            uncetaintyA: 1,
-            uncetaintyAP: 1,
-            carType: 0,
-            startName: "%EC%9D%84%EC%A7%80%EB%A1%9C%20%EC%9E%85%EA%B5%AC%EC%97%AD",
-            endName: "%ED%97%A4%EC%9D%B4%EB%A6%AC",
-            passList: "127.38454163183215,36.35127257501252",
-            gpsInfoList: "126.939376564495,37.470947057194365,120430,20,50,5,2,12,1_126.939376564495,37.470947057194365,120430,20,50,5,2,12,1",
-            detailPosFlag: '2',
-            sort: index
+            searchOption: "0", // 0=추천/빠른길
+            trafficInfo: "Y",  // 교통정보 반영
+            startName: "출발지",
+            endName: "도착지",
         });
 
         const resp = await fetch(url, {
