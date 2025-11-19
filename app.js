@@ -395,15 +395,24 @@ async function requestTmapRoute(startLng, startLat, endLng, endLat) {
                 "Tmap totalDistance(m):",
                 prop.totalDistance,
                 "totalTime(sec):",
-                prop.totalTime
+                prop.totalSec
             );
+            console.log("예상 소요 시간:", formatTime(prop.totalTime));
         }
     } catch (e) {
         console.error("tmap-route fetch error:", e);
         if (navChip) navChip.textContent = "경로 오류";
         alert("Tmap 경로 탐색 중 오류 발생");
     }
+
+    const etaChip = document.createElement("div");
+    etaChip.className = "chip";
+    etaChip.id = "eta";
+    etaChip.textContent = "ETA 없음";
+    document.querySelector(".hud").appendChild(etaChip);
 }
+
+etaChip.textContent = formatTime(prop.totalTime);
 
 // === 제스처 정책 ===
 function applyGesturePolicy() {
@@ -421,11 +430,6 @@ function applyGesturePolicy() {
 }
 applyGesturePolicy();
 
-btnNorth.onclick = () => {
-    northUp = !northUp;
-    btnNorth.textContent = northUp ? "N↑ 북쪽고정" : "🚗 진행방향";
-    applyGesturePolicy();
-};
 
 btnLocate.onclick = () => {
     followGps = true;
