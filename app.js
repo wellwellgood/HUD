@@ -404,13 +404,20 @@ async function requestTmapRoute(startLng, startLat, endLng, endLat) {
         if (navChip) navChip.textContent = "경로 오류";
         alert("Tmap 경로 탐색 중 오류 발생");
     }
+}
 
-    const etaChip = document.createElement("div");
+let etaChip = null;
+
+(function setupEtaChip() {
+    const hud = document.querySelector(".hud");
+    if (!hud) return;
+
+    etaChip = document.createElement("div");
     etaChip.className = "chip";
     etaChip.id = "eta";
-    etaChip.textContent = "ETA 없음";
-    document.querySelector(".hud").appendChild(etaChip);
-}
+    etaChip.textContent = "ETA 없음"; // 기본값
+    hud.appendChild(etaChip);
+})();
 
 etaChip.textContent = formatTime(prop.totalTime);
 
