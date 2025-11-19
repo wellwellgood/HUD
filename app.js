@@ -1,12 +1,81 @@
-// === 글로벌 변수 ===
-let northUp = true;    // 북쪽 고정 기본값
-let lastFix = null;    // 최근 위치 캐시
-let userInteracting = false;
-let _idleT;
-let followGps = true;   // 지도 중심을 GPS에 맞춰 자동 이동할지 여부
+// === 글로벌 상태 ===
+let northUp = true;          // 북쪽 고정 모드 여부
+let lastFix = null;          // 최근 GPS [lng, lat]
+let userInteracting = false; // 손으로 지도 조작 중인지
+let _idleTimer = null;
+let followGps = true;        // GPS 따라 자동 이동 여부
+
+// 경로/길안내 상태
+let routeLineCoords = [];    // 전체 경로 polyline 좌표들
+let routeSteps = [];         // 안내용 포인트 배열 [{ lng, lat, turnType, description }]
+let currentStepIndex = 0;
+
+// HUD 길안내 엘리먼트
+let navChip = null;
+
+// === 유틸: 각도/거리 계산 ===
+function clampBearing(deg) {
+    return ((deg % 360) + 360) % 360;
+}
+
+function toKmH(ms) {
+    return Math.round((ms || 0) * 3.6);
+}
+
+function toRad(deg) {
+    return (deg * Math.PI) / 180;
+}
+
+// 하버사인 거리(m)
+function haversineMeters(lat1, lng1, lat2, lng2) {
+    const R = 6371000;
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) *
+        Math.cos(toRad(lat2)) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
+// turnType → 한국어 안내 문구
+function turnTypeToText(turnType) {
+    const t = Number(turnType);
+    switch (t) {
+        case 11:
+        case 51:
+            return "직진";
+        case 12:
+        case 16:
+        case 17:
+            return "좌회전";
+        case 13:
+        case 18:
+        case 19:
+            return "우회전";
+        case 14:
+            return "U턴";
+        case 71:
+            return "첫 번째 출구";
+        case 72:
+            return "두 번째 출구";
+        case 73:
+            return "첫 번째 오른쪽 길";
+        case 200:
+            return "출발지";
+        case 201:
+            return "목적지";
+        default:
+            return "직진";
+    }
+}
 
 // === 지도 생성 ===
-const MAP_STYLE = "https://api.maptiler.com/maps/streets-v2/style.json?key=2HioygjPVFKopzhBEhM3";
+const MAP_STYLE =
+    "https://api.maptiler.com/maps/streets-v2/style.json?key=2HioygjPVFKopzhBEhM3";
 
 const map = new maplibregl.Map({
     container: "map",
@@ -18,7 +87,22 @@ const map = new maplibregl.Map({
 
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
 
-// === 위치버튼 + 북쪽고정버튼 ===
+// === HUD / 버튼 세팅 ===
+const spdEl = document.getElementById("spd");
+const brgEl = document.getElementById("brg");
+
+// 길안내 chip 동적으로 추가
+(function setupNavChip() {
+    const hud = document.querySelector(".hud");
+    if (!hud) return;
+    navChip = document.createElement("div");
+    navChip.className = "chip";
+    navChip.id = "nav";
+    navChip.textContent = "경로 없음";
+    hud.appendChild(navChip);
+})();
+
+// 위치/북쪽 고정 버튼
 const ctl = document.createElement("div");
 ctl.style.cssText = `
   position: fixed;
@@ -29,35 +113,48 @@ ctl.style.cssText = `
   gap: 8px;
   pointer-events: auto;
 `;
-const mkBtn = (t) => {
+function mkBtn(label) {
     const b = document.createElement("button");
-    b.textContent = t;
+    b.textContent = label;
     b.style.cssText = `
-      padding: 8px 10px;
-      border: 1px solid #2dd4bf;
-      border-radius: 999px;
-      background: rgba(0,0,0,.7);
-      color: #0ff;
-      font: 600 13px ui-monospace;
-      box-shadow: 0 4px 12px rgba(0,0,0,.6);
-      backdrop-filter: blur(8px);
-    `;
+    padding: 8px 10px;
+    border: 1px solid #2dd4bf;
+    border-radius: 999px;
+    background: rgba(0,0,0,.7);
+    color: #0ff;
+    font: 600 13px ui-monospace;
+    box-shadow: 0 4px 12px rgba(0,0,0,.6);
+    backdrop-filter: blur(8px);
+  `;
     return b;
-};
+}
 const btnLocate = mkBtn("📍 현위치");
 const btnNorth = mkBtn("N↑ 북쪽고정");
 ctl.append(btnLocate, btnNorth);
 document.body.appendChild(ctl);
 
-// === 제스처 및 사용자 상태 감지 ===
+// === 제스처/사용자 상태 ===
 map.dragRotate.enable();
 map.touchZoomRotate.enable();
 map.touchZoomRotate.enableRotation();
 map.scrollZoom.enable();
 map.keyboard.enable();
-map.on("movestart", () => { userInteracting = true; clearTimeout(_idleT); });
-map.on("moveend", () => { clearTimeout(_idleT); _idleT = setTimeout(() => userInteracting = false, 1500); });
-map.on("rotateend", () => { if (!northUp && map.getBearing() !== 0) map.easeTo({ bearing: 0, duration: 300 }); });
+
+map.on("movestart", () => {
+    userInteracting = true;
+    if (_idleTimer) clearTimeout(_idleTimer);
+});
+map.on("moveend", () => {
+    if (_idleTimer) clearTimeout(_idleTimer);
+    _idleTimer = setTimeout(() => {
+        userInteracting = false;
+    }, 1500);
+});
+map.on("rotateend", () => {
+    if (!northUp && map.getBearing() !== 0) {
+        map.easeTo({ bearing: 0, duration: 300 });
+    }
+});
 
 // === GeolocateControl ===
 const geolocate = new maplibregl.GeolocateControl({
@@ -67,84 +164,157 @@ const geolocate = new maplibregl.GeolocateControl({
     showUserHeading: true,
 });
 map.addControl(geolocate, "top-right");
-map.on("load", () => { map.resize(); });
+
+map.on("load", () => {
+    map.resize();
+});
+
 window.addEventListener("orientationchange", () => map.resize());
 window.addEventListener("resize", () => map.resize());
 
-// === GPS 팔로우 ===
-const spdEl = document.getElementById("spd");
-const brgEl = document.getElementById("brg");
-
+// === GPS 팔로우 / 마커 ===
 const markerEl = document.createElement("div");
 markerEl.style.cssText =
     "width:16px;height:16px;border-radius:50%;background:#0ff;box-shadow:0 0 8px #0ff;";
-const marker = new maplibregl.Marker({ element: markerEl }).setLngLat(map.getCenter()).addTo(map);
+const marker = new maplibregl.Marker({ element: markerEl })
+    .setLngLat(map.getCenter())
+    .addTo(map);
 
-function toKmH(ms) { return Math.round((ms || 0) * 3.6); }
-function clampBearing(deg) { return ((deg % 360) + 360) % 360; }
+const geoOpts = {
+    enableHighAccuracy: true,
+    maximumAge: 5000,
+    timeout: 30000,
+};
 
-const geoOpts = { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 };
+function updateGuidanceForPosition(center) {
+    if (!routeSteps.length || !navChip) return;
+
+    const [lng, lat] = center;
+
+    // 현재 스텝 이후 중 가장 가까운 안내 포인트 찾기
+    let bestIdx = currentStepIndex;
+    let bestDist = Infinity;
+
+    for (let i = currentStepIndex; i < routeSteps.length; i++) {
+        const s = routeSteps[i];
+        const d = haversineMeters(lat, lng, s.lat, s.lng);
+        if (d < bestDist) {
+            bestDist = d;
+            bestIdx = i;
+        }
+    }
+
+    currentStepIndex = bestIdx;
+    const step = routeSteps[bestIdx];
+    const turnText = step.description
+        ? step.description
+        : turnTypeToText(step.turnType);
+
+    let label;
+
+    if (Number(step.turnType) === 201) {
+        label = "곧 목적지입니다";
+    } else if (bestDist < 15) {
+        // 거의 안내 지점 통과
+        label = "지금 " + turnText;
+    } else {
+        label = `${Math.round(bestDist)}m 앞 ${turnText}`;
+    }
+
+    navChip.textContent = label;
+}
+
 const onPos = (pos) => {
     const { longitude, latitude, speed, heading } = pos.coords;
     const center = [longitude, latitude];
     lastFix = center;
 
-    if (!followGps) return;
-
     marker.setLngLat(center);
+
     if (spdEl) spdEl.textContent = `${toKmH(speed)} km/h`;
     if (brgEl) brgEl.textContent = `${Math.round(clampBearing(heading ?? 0))}°`;
 
-    const easeOpts = {
-        center,
-        bearing: northUp ? (heading ?? map.getBearing()) : 0,
-        duration: 600,
-    };
-    if (!userInteracting) easeOpts.pitch = 60;
-    map.easeTo(easeOpts);
+    if (followGps) {
+        const easeOpts = {
+            center,
+            bearing: northUp ? (heading ?? map.getBearing()) : 0,
+            duration: 600,
+        };
+        if (!userInteracting) easeOpts.pitch = 60;
+        map.easeTo(easeOpts);
+    }
+
+    // 길 안내 업데이트
+    updateGuidanceForPosition(center);
 };
+
 const onErr = (e) => {
     console.warn("geo error", e.code, e.message);
     if (spdEl) spdEl.textContent = "위치권한 거부/실패";
-    navigator.geolocation.getCurrentPosition(onPos, console.warn, { ...geoOpts, timeout: 45000 });
+    navigator.geolocation.getCurrentPosition(onPos, console.warn, {
+        ...geoOpts,
+        timeout: 45000,
+    });
 };
+
 navigator.geolocation.watchPosition(onPos, onErr, geoOpts);
 
-// === Tmap 경로용 소스/레이어 ID ===
+// === Tmap 경로 렌더링 ===
 const ROUTE_SOURCE_ID = "tmap-route-source";
 const ROUTE_LAYER_ID = "tmap-route-layer";
 
-// Tmap 응답 -> MapLibre 라인으로 그리기
 function drawTmapRoute(tmapData) {
     console.log("Tmap route raw data:", tmapData);
+
+    routeLineCoords = [];
+    routeSteps = [];
+    currentStepIndex = 0;
+    if (navChip) navChip.textContent = "경로 안내 준비중";
 
     if (!tmapData || !Array.isArray(tmapData.features)) {
         console.warn("Tmap data has no features");
         return;
     }
 
-    const lineCoords = [];
-
     for (const f of tmapData.features) {
         const geom = f.geometry;
+        const prop = f.properties || {};
+
         if (geom && geom.type === "LineString" && Array.isArray(geom.coordinates)) {
             for (const c of geom.coordinates) {
-                // WGS84GEO 기준 [lng, lat]
-                lineCoords.push([c[0], c[1]]);
+                routeLineCoords.push([c[0], c[1]]);
+            }
+        }
+
+        if (geom && geom.type === "Point" && geom.coordinates) {
+            const [lng, lat] = geom.coordinates;
+            if (typeof prop.turnType !== "undefined") {
+                routeSteps.push({
+                    lng,
+                    lat,
+                    turnType: prop.turnType,
+                    description: prop.description || prop.name || "",
+                });
             }
         }
     }
 
-    console.log("Tmap route point count:", lineCoords.length);
+    console.log(
+        "Tmap route line points:",
+        routeLineCoords.length,
+        "steps:",
+        routeSteps.length
+    );
 
-    if (lineCoords.length === 0) {
-        console.warn("No LineString found in Tmap route");
+    if (!routeLineCoords.length) {
+        console.warn("No LineString in Tmap route");
+        if (navChip) navChip.textContent = "경로 데이터 없음";
         return;
     }
 
     const geojson = {
         type: "Feature",
-        geometry: { type: "LineString", coordinates: lineCoords },
+        geometry: { type: "LineString", coordinates: routeLineCoords },
         properties: {},
     };
 
@@ -172,9 +342,12 @@ function drawTmapRoute(tmapData) {
         });
     }
 
+    // 경로 전체 보기
     const bounds = new maplibregl.LngLatBounds();
-    lineCoords.forEach((c) => bounds.extend(c));
+    routeLineCoords.forEach((c) => bounds.extend(c));
     map.fitBounds(bounds, { padding: 80, duration: 800 });
+
+    if (navChip) navChip.textContent = "경로 안내 시작";
 }
 
 // Tmap 경로 API 호출
@@ -189,10 +362,13 @@ async function requestTmapRoute(startLng, startLat, endLng, endLat) {
 
         console.log("call /tmap-route with:", params.toString());
 
-        const res = await fetch("/.netlify/functions/tmap-route?" + params.toString());
+        const res = await fetch(
+            "/.netlify/functions/tmap-route?" + params.toString()
+        );
         console.log("tmap-route status:", res.status);
 
         if (!res.ok) {
+            if (navChip) navChip.textContent = "경로 탐색 실패";
             alert("Tmap 경로 탐색 실패(" + res.status + ")");
             return;
         }
@@ -202,14 +378,21 @@ async function requestTmapRoute(startLng, startLat, endLng, endLat) {
 
         if (data.features && data.features.length > 0) {
             const prop = data.features[0].properties || {};
-            console.log("Tmap totalDistance(m):", prop.totalDistance, "totalTime(sec):", prop.totalTime);
+            console.log(
+                "Tmap totalDistance(m):",
+                prop.totalDistance,
+                "totalTime(sec):",
+                prop.totalTime
+            );
         }
     } catch (e) {
         console.error("tmap-route fetch error:", e);
+        if (navChip) navChip.textContent = "경로 오류";
         alert("Tmap 경로 탐색 중 오류 발생");
     }
 }
 
+// === 제스처 정책 ===
 function applyGesturePolicy() {
     map.dragPan.enable();
     map.scrollZoom.enable();
@@ -231,78 +414,6 @@ btnNorth.onclick = () => {
     applyGesturePolicy();
 };
 
-const qInput = document.getElementById("q");
-
-// === 카카오 API로 검색 (Netlify Function 사용) ===
-async function doSearch() {
-    const q = qInput.value.trim();
-    if (!q) return;
-
-    try {
-        const res = await fetch(
-            "/.netlify/functions/geocode?q=" + encodeURIComponent(q)
-        );
-
-        if (!res.ok) {
-            console.error("geocode function error status:", res.status);
-            alert("검색 실패(" + res.status + ")");
-            return;
-        }
-
-        const data = await res.json();
-        console.log("geocode result:", data);
-
-        // 카카오 검색 구조: data.documents
-        if (data.documents && data.documents.length > 0) {
-            const place = data.documents[0];
-            const lng = Number(place.x);
-            const lat = Number(place.y);
-
-            followGps = false;
-            userInteracting = true;
-
-            // 목적지로 지도 이동
-            map.easeTo({
-                center: [lng, lat],
-                zoom: 16,
-                duration: 800,
-            });
-
-            console.log("lastFix (current GPS):", lastFix);
-
-            // 현위치가 잡혀 있으면 Tmap 경로 요청
-            if (lastFix) {
-                requestTmapRoute(lastFix[0], lastFix[1], lng, lat);
-            } else {
-                console.log("아직 GPS fix 없음 → Tmap 경로 API 호출 안 함");
-            }
-        } else {
-            alert("검색 결과 없음");
-        }
-    } catch (e) {
-        console.error("geocode fetch error:", e);
-        alert("검색 중 오류 발생");
-    }
-}
-
-// 엔터 키로 검색
-qInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-        e.preventDefault();
-        e.stopPropagation();
-        doSearch();
-    }
-});
-
-// 폼 제출 방지
-if (qInput.form) {
-    qInput.form.addEventListener("submit", (e) => {
-        e.preventDefault();
-        doSearch();
-    });
-}
-
-// 버튼으로 유저 위치 찾기
 btnLocate.onclick = () => {
     followGps = true;
     userInteracting = false;
@@ -316,11 +427,9 @@ btnLocate.onclick = () => {
     } else {
         navigator.geolocation.getCurrentPosition(
             (p) => {
-                const c = [p.coords.longitude, p.coords.latitude];
-                lastFix = c;
-
+                lastFix = [p.coords.longitude, p.coords.latitude];
                 map.easeTo({
-                    center: c,
+                    center: lastFix,
                     duration: 600,
                     zoom: Math.max(16, map.getZoom()),
                 });
@@ -330,3 +439,80 @@ btnLocate.onclick = () => {
         );
     }
 };
+
+// === 검색 → 카카오 geocode + Tmap 경로 ===
+const qInput = document.getElementById("q");
+
+async function doSearch() {
+    const q = qInput.value.trim();
+    if (!q) return;
+
+    try {
+        const res = await fetch(
+            "/.netlify/functions/geocode?q=" + encodeURIComponent(q)
+        );
+        if (!res.ok) {
+            console.error("geocode function error status:", res.status);
+            alert("검색 실패(" + res.status + ")");
+            return;
+        }
+
+        const data = await res.json();
+        console.log("geocode result:", data);
+
+        if (data.documents && data.documents.length > 0) {
+            const place = data.documents[0];
+            const lng = Number(place.x);
+            const lat = Number(place.y);
+
+            followGps = false;
+            userInteracting = true;
+
+            map.easeTo({
+                center: [lng, lat],
+                zoom: 16,
+                duration: 800,
+            });
+
+            console.log("lastFix (current GPS):", lastFix);
+
+            if (lastFix) {
+                requestTmapRoute(lastFix[0], lastFix[1], lng, lat);
+            } else {
+                console.log("lastFix 없음 → getCurrentPosition으로 한 번 더 시도");
+                navigator.geolocation.getCurrentPosition(
+                    (p) => {
+                        lastFix = [p.coords.longitude, p.coords.latitude];
+                        console.log("fallback geo fix:", lastFix);
+                        requestTmapRoute(lastFix[0], lastFix[1], lng, lat);
+                    },
+                    (err) => {
+                        console.warn("fallback geo error", err);
+                        alert("현위치 정보를 가져올 수 없어서 경로를 그릴 수 없습니다.");
+                    },
+                    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+                );
+            }
+        } else {
+            alert("검색 결과 없음");
+        }
+    } catch (e) {
+        console.error("geocode fetch error:", e);
+        alert("검색 중 오류 발생");
+    }
+}
+
+qInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+        e.preventDefault();
+        e.stopPropagation();
+        doSearch();
+    }
+});
+
+if (qInput.form) {
+    qInput.form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        doSearch();
+    });
+}
