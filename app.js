@@ -5,6 +5,10 @@ let userInteracting = false;
 let _idleT;
 let followGps = true;   // 지도 중심을 GPS에 맞춰 자동 이동할지 여부
 
+// Tmap 경로용 소스/레이어 id
+const ROUTE_SOURCE_ID = "tmap-route-source";
+const ROUTE_LAYER_ID = "tmap-route-layer";
+
 // === 지도 생성 ===
 const MAP_STYLE = "https://api.maptiler.com/maps/streets-v2/style.json?key=2HioygjPVFKopzhBEhM3";
 
@@ -91,7 +95,6 @@ const onPos = (pos) => {
 
     if (!followGps) return;
 
-
     marker.setLngLat(center);
     if (spdEl) spdEl.textContent = `${toKmH(speed)} km/h`;
     if (brgEl) brgEl.textContent = `${Math.round(clampBearing(heading ?? 0))}°`;
@@ -111,6 +114,102 @@ const onErr = (e) => {
 };
 navigator.geolocation.watchPosition(onPos, onErr, geoOpts);
 
+// === Tmap 경로 그리기 유틸 ===
+function drawTmapRoute(tmapData) {
+    if (!tmapData || !Array.isArray(tmapData.features)) {
+        console.warn("Tmap data has no features");
+        return;
+    }
+
+    const lineCoords = [];
+    for (const f of tmapData.features) {
+        const geom = f.geometry;
+        if (geom && geom.type === "LineString" && Array.isArray(geom.coordinates)) {
+            for (const c of geom.coordinates) {
+                // resCoordType을 WGS84GEO로 줬으니 [lng, lat] 그대로 사용 :contentReference[oaicite:3]{index=3}
+                lineCoords.push([c[0], c[1]]);
+            }
+        }
+    }
+
+    if (lineCoords.length === 0) {
+        console.warn("No LineString in Tmap route");
+        return;
+    }
+
+    const geojson = {
+        type: "Feature",
+        geometry: { type: "LineString", coordinates: lineCoords },
+        properties: {},
+    };
+
+    if (map.getSource(ROUTE_SOURCE_ID)) {
+        map.getSource(ROUTE_SOURCE_ID).setData(geojson);
+    } else {
+        map.addSource(ROUTE_SOURCE_ID, {
+            type: "geojson",
+            data: geojson,
+        });
+        map.addLayer({
+            id: ROUTE_LAYER_ID,
+            type: "line",
+            source: ROUTE_SOURCE_ID,
+            layout: {
+                "line-cap": "round",
+                "line-join": "round",
+            },
+            paint: {
+                "line-color": "#00f0ff",
+                "line-width": 6,
+                "line-opacity": 0.9,
+            },
+        });
+    }
+
+    // 경로 전체가 보이도록 fitBounds
+    const bounds = new maplibregl.LngLatBounds();
+    lineCoords.forEach((c) => bounds.extend(c));
+    map.fitBounds(bounds, { padding: 80, duration: 800 });
+}
+
+async function requestTmapRoute(startLng, startLat, endLng, endLat) {
+    try {
+        const params = new URLSearchParams({
+            sx: String(startLng),
+            sy: String(startLat),
+            ex: String(endLng),
+            ey: String(endLat),
+        });
+
+        const res = await fetch("/.netlify/functions/tmap-route?" + params.toString());
+        if (!res.ok) {
+            console.error("tmap-route error status:", res.status);
+            alert("Tmap 경로 탐색 실패(" + res.status + ")");
+            return;
+        }
+
+        const data = await res.json();
+        drawTmapRoute(data);
+
+        // 남은 거리/시간 정보 (선택적으로 HUD에 붙이고 싶으면 여기서 활용)
+        const first = data.features && data.features[0];
+        const prop = first && first.properties;
+        if (prop && typeof prop.totalDistance === "number") {
+            console.log(
+                "총 거리(m):",
+                prop.totalDistance,
+                "총 시간(sec):",
+                prop.totalTime
+            );
+            // 예) km, 분으로 바꿔서 DOM에 띄우고 싶으면 chip 하나 더 만들어서 넣으면 됨 :contentReference[oaicite:4]{index=4}
+        }
+    } catch (e) {
+        console.error("tmap-route fetch error:", e);
+        alert("Tmap 경로 탐색 중 오류 발생");
+    }
+}
+
+// === 제스처 정책 ===
 function applyGesturePolicy() {
     map.dragPan.enable();
     map.scrollZoom.enable();
@@ -161,11 +260,19 @@ async function doSearch() {
             followGps = false;
             userInteracting = true;
 
+            // 목적지로 이동
             map.easeTo({
                 center: [lng, lat],
                 zoom: 16,
                 duration: 800,
             });
+
+            // 현위치가 잡혀 있으면 Tmap 경로 요청 (현위치 → 검색목적지)
+            if (lastFix) {
+                requestTmapRoute(lastFix[0], lastFix[1], lng, lat);
+            } else {
+                console.log("아직 GPS fix가 없어서 Tmap 경로는 호출 안 함");
+            }
         } else {
             alert("검색 결과 없음");
         }
