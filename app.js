@@ -74,6 +74,20 @@ function turnTypeToText(turnType) {
     }
 }
 
+function formatTime(totalSec) {
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = Math.floor(totalSec % 60);
+
+    if (h > 0) {
+        return `${h}시간 ${m}분 ${s}초`;
+    } else if (m > 0) {
+        return `${m}분 ${s}초`;
+    } else {
+        return `${s}초`;
+    }
+}
+
 // === 지도 생성 ===
 const MAP_STYLE =
     "https://api.maptiler.com/maps/streets-v2/style.json?key=2HioygjPVFKopzhBEhM3";
