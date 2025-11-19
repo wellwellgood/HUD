@@ -48,18 +48,16 @@ exports.handler = async (event, context) => {
     try {
         // 자동차차 경로 안내 API 사용
         // POST https://apis.openapi.sk.com/tmap/routes/pedestrian?version=1&format=json :contentReference[oaicite:1]{index=1}
-        const url =
-            "https://apis.openapi.sk.com/tmap/routes?version=1&callback=function";
-
+        const url = "https://apis.openapi.sk.com/tmap/routes?version=1&format=json";
         const body = JSON.stringify({
             startX: sx,
             startY: sy,
             endX: ex,
             endY: ey,
-            reqCoordType: "WGS84GEO", // 위경도 입력
-            resCoordType: "WGS84GEO", // 그대로 위경도로 받기 (MapLibre에 바로 사용)
-            startName: "출발지",
-            endName: "도착지",
+            reqCoordType: "WGS84GEO",
+            resCoordType: "WGS84GEO",
+            searchOption: "0",   // 0=빠른길, 1=무료도로, 2=최단거리, 4=고속도로 우선 등
+            trafficInfo: "N"     // "Y" 하면 교통정보 포함(경로 형태 달라짐)
         });
 
         const resp = await fetch(url, {
@@ -68,7 +66,6 @@ exports.handler = async (event, context) => {
                 "Content-Type": "application/json",
                 Accept: "application/json",
                 appKey: TMAP_APP_KEY,
-                YEWVxfrK4j8xTNQZURJ4z1Te4JTZs26v45fgmfn7
             },
             body,
         });
