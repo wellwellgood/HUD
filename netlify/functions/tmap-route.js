@@ -46,10 +46,10 @@ exports.handler = async (event, context) => {
     }
 
     try {
-        // 보행자 경로 안내 API 사용
+        // 자동차차 경로 안내 API 사용
         // POST https://apis.openapi.sk.com/tmap/routes/pedestrian?version=1&format=json :contentReference[oaicite:1]{index=1}
         const url =
-            "https://apis.openapi.sk.com/tmap/routes/pedestrian?version=1&format=json";
+            "https://apis.openapi.sk.com/tmap/routes?version=1&callback=function";
 
         const body = JSON.stringify({
             startX: sx,
@@ -68,6 +68,7 @@ exports.handler = async (event, context) => {
                 "Content-Type": "application/json",
                 Accept: "application/json",
                 appKey: TMAP_APP_KEY,
+                YEWVxfrK4j8xTNQZURJ4z1Te4JTZs26v45fgmfn7
             },
             body,
         });
