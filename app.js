@@ -9,6 +9,7 @@ let followGps = true;        // GPS 따라 자동 이동 여부
 let routeLineCoords = [];    // 전체 경로 polyline 좌표들
 let routeSteps = [];         // 안내용 포인트 배열 [{ lng, lat, turnType, description }]
 let currentStepIndex = 0;
+let guidanceActive = false;  // 경로 안내 ON/OFF
 
 // HUD 길안내 엘리먼트
 let navChip = null;
@@ -102,7 +103,7 @@ const brgEl = document.getElementById("brg");
     hud.appendChild(navChip);
 })();
 
-// 위치/북쪽 고정 버튼
+// 위치/북쪽 고정/경로안내 버튼
 const ctl = document.createElement("div");
 ctl.style.cssText = `
   position: fixed;
@@ -130,7 +131,8 @@ function mkBtn(label) {
 }
 const btnLocate = mkBtn("📍 현위치");
 const btnNorth = mkBtn("N↑ 북쪽고정");
-ctl.append(btnLocate, btnNorth);
+const btnGuide = mkBtn("▶ 경로안내");
+ctl.append(btnLocate, btnNorth, btnGuide);
 document.body.appendChild(ctl);
 
 // === 제스처/사용자 상태 ===
@@ -187,11 +189,10 @@ const geoOpts = {
 };
 
 function updateGuidanceForPosition(center) {
-    if (!routeSteps.length || !navChip) return;
+    if (!guidanceActive || !routeSteps.length || !navChip) return;
 
     const [lng, lat] = center;
 
-    // 현재 스텝 이후 중 가장 가까운 안내 포인트 찾기
     let bestIdx = currentStepIndex;
     let bestDist = Infinity;
 
@@ -211,11 +212,9 @@ function updateGuidanceForPosition(center) {
         : turnTypeToText(step.turnType);
 
     let label;
-
     if (Number(step.turnType) === 201) {
         label = "곧 목적지입니다";
     } else if (bestDist < 15) {
-        // 거의 안내 지점 통과
         label = "지금 " + turnText;
     } else {
         label = `${Math.round(bestDist)}m 앞 ${turnText}`;
@@ -244,7 +243,6 @@ const onPos = (pos) => {
         map.easeTo(easeOpts);
     }
 
-    // 길 안내 업데이트
     updateGuidanceForPosition(center);
 };
 
@@ -342,12 +340,13 @@ function drawTmapRoute(tmapData) {
         });
     }
 
-    // 경로 전체 보기
     const bounds = new maplibregl.LngLatBounds();
     routeLineCoords.forEach((c) => bounds.extend(c));
     map.fitBounds(bounds, { padding: 80, duration: 800 });
 
     if (navChip) navChip.textContent = "경로 안내 시작";
+    guidanceActive = true;
+    btnGuide.textContent = "⏹ 경로중지";
 }
 
 // Tmap 경로 API 호출
@@ -440,6 +439,15 @@ btnLocate.onclick = () => {
     }
 };
 
+// ▶ 경로안내 버튼 토글
+btnGuide.onclick = () => {
+    guidanceActive = !guidanceActive;
+    btnGuide.textContent = guidanceActive ? "⏹ 경로중지" : "▶ 경로안내";
+    if (navChip && !guidanceActive) {
+        navChip.textContent = "경로 안내 일시중지";
+    }
+};
+
 // === 검색 → 카카오 geocode + Tmap 경로 ===
 const qInput = document.getElementById("q");
 
@@ -476,23 +484,27 @@ async function doSearch() {
 
             console.log("lastFix (current GPS):", lastFix);
 
-            if (lastFix) {
-                requestTmapRoute(lastFix[0], lastFix[1], lng, lat);
-            } else {
-                console.log("lastFix 없음 → getCurrentPosition으로 한 번 더 시도");
-                navigator.geolocation.getCurrentPosition(
-                    (p) => {
-                        lastFix = [p.coords.longitude, p.coords.latitude];
-                        console.log("fallback geo fix:", lastFix);
-                        requestTmapRoute(lastFix[0], lastFix[1], lng, lat);
-                    },
-                    (err) => {
-                        console.warn("fallback geo error", err);
-                        alert("현위치 정보를 가져올 수 없어서 경로를 그릴 수 없습니다.");
-                    },
-                    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-                );
-            }
+            const startRoute = () => {
+                if (lastFix) {
+                    requestTmapRoute(lastFix[0], lastFix[1], lng, lat);
+                } else {
+                    console.log("lastFix 없음 → getCurrentPosition으로 한 번 더 시도");
+                    navigator.geolocation.getCurrentPosition(
+                        (p) => {
+                            lastFix = [p.coords.longitude, p.coords.latitude];
+                            console.log("fallback geo fix:", lastFix);
+                            requestTmapRoute(lastFix[0], lastFix[1], lng, lat);
+                        },
+                        (err) => {
+                            console.warn("fallback geo error", err);
+                            alert("현위치 정보를 가져올 수 없어서 경로를 그릴 수 없습니다.");
+                        },
+                        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+                    );
+                }
+            };
+
+            startRoute();
         } else {
             alert("검색 결과 없음");
         }
