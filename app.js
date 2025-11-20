@@ -399,6 +399,11 @@ async function requestTmapRoute(startLng, startLat, endLng, endLat) {
             );
             console.log("예상 소요 시간:", formatTime(prop.totalTime));
         }
+
+        if (etaChip && prop.totalTime) {
+            etaChip.textContent = "예상 " + formatTime(prop.totalTime);
+        }
+
     } catch (e) {
         console.error("tmap-route fetch error:", e);
         if (navChip) navChip.textContent = "경로 오류";
@@ -419,7 +424,6 @@ let etaChip = null;
     hud.appendChild(etaChip);
 })();
 
-etaChip.textContent = formatTime(prop.totalTime);
 
 // === 제스처 정책 ===
 function applyGesturePolicy() {
