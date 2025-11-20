@@ -167,12 +167,14 @@ map.keyboard.enable();
 
 map.on("movestart", () => {
     userInteracting = true;
+    followGps = false; // 👈 제스처 시작 시 GPS 팔로우 비활성화
     if (idleTimer) clearTimeout(idleTimer);
 });
 map.on("moveend", () => {
     if (idleTimer) clearTimeout(idleTimer);
     idleTimer = setTimeout(() => {
         userInteracting = false;
+        // followGps 상태는 변경하지 않음. '📍 현위치' 버튼을 눌러야 다시 활성화
     }, 1500);
 });
 map.on("rotateend", () => {
@@ -552,27 +554,42 @@ btnLocate.onclick = () => {
     followGps = true;
     userInteracting = false;
 
-    if (lastFix) {
+    destCoord = [lng, lat];
+
+    const locateAndFollow = (center) => {
+        lastFix = center;
         map.easeTo({
             center: lastFix,
             duration: 600,
             zoom: Math.max(16, map.getZoom()),
+            // 'moveend' 이벤트는 easeTo가 끝날 때 발생
         });
+    };
+
+    if (lastFix) {
+        locateAndFollow(lastFix);
     } else {
         navigator.geolocation.getCurrentPosition(
             (p) => {
-                lastFix = [p.coords.longitude, p.coords.latitude];
-                map.easeTo({
-                    center: lastFix,
-                    duration: 600,
-                    zoom: Math.max(16, map.getZoom()),
-                });
+                locateAndFollow([p.coords.longitude, p.coords.latitude]);
             },
             console.warn,
             { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
         );
     }
 };
+
+// map.on('moveend') 핸들러 수정/추가:
+// 사용자가 지도를 손으로 조작하지 않은 경우 (idleTimer가 만료된 경우),
+// 또는 '📍 현위치' 버튼을 누른 경우에 followGps = true; 를 설정합니다.
+map.on("moveend", () => {
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => {
+        userInteracting = false;
+        // 1.5초 후 사용자 조작이 없으면 GPS 팔로우 모드를 다시 활성화
+        followGps = true; // <-- 이 부분이 중요
+    }, 1500);
+});
 
 // 경로안내 버튼: 안내만 ON/OFF (경로는 그대로)
 btnGuide.onclick = () => {
@@ -612,7 +629,7 @@ async function doSearch() {
             destCoord = [lng, lat];
 
             followGps = false;
-            userInteracting = true;
+            userInteracting = false;
 
             map.easeTo({
                 center: [lng, lat],
