@@ -6,15 +6,24 @@ let _idleTimer = null;
 let followGps = true;        // GPS 따라 자동 이동 여부
 
 // 경로/길안내 상태
-let routeLineCoords = [];    // 전체 경로 polyline 좌표들
+let routeLineCoords = [];    // 전체 경로 polyline 좌표들 [ [lng,lat], ... ]
 let routeSteps = [];         // 안내용 포인트 배열 [{ lng, lat, turnType, description }]
 let currentStepIndex = 0;
-let guidanceActive = false;  // 경로 안내 ON/OFF
+let guidanceActive = true;   // 경로 안내 ON/OFF
 
-// HUD 길안내 엘리먼트
-let navChip = null;
+// 경로 요약 정보
+let totalDistanceM = 0;      // 전체 거리(m)
+let totalTimeSec = 0;        // 전체 시간(sec)
 
-// === 유틸: 각도/거리 계산 ===
+// HUD 엘리먼트
+let navChip = null;          // 다음 턴 안내
+let etaChip = null;          // 남은 시간
+let distChip = null;         // 남은 거리
+
+// C. 카메라/속도 구조용
+let cameraMarkers = [];      // 단속 카메라 마커들 (데이터 연결되면 사용)
+
+// === 유틸: 각도/거리/시간 포맷 ===
 function clampBearing(deg) {
     return ((deg % 360) + 360) % 360;
 }
@@ -42,7 +51,18 @@ function haversineMeters(lat1, lng1, lat2, lng2) {
     return R * c;
 }
 
-// turnType → 한국어 안내 문구
+// 초 → "h시간 m분 s초"
+function formatTime(totalSec) {
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = Math.floor(totalSec % 60);
+
+    if (h > 0) return `${h}시간 ${m}분 ${s}초`;
+    if (m > 0) return `${m}분 ${s}초`;
+    return `${s}초`;
+}
+
+// turnType → 텍스트
 function turnTypeToText(turnType) {
     const t = Number(turnType);
     switch (t) {
@@ -74,20 +94,6 @@ function turnTypeToText(turnType) {
     }
 }
 
-function formatTime(totalSec) {
-    const h = Math.floor(totalSec / 3600);
-    const m = Math.floor((totalSec % 3600) / 60);
-    const s = Math.floor(totalSec % 60);
-
-    if (h > 0) {
-        return `${h}시간 ${m}분 ${s}초`;
-    } else if (m > 0) {
-        return `${m}분 ${s}초`;
-    } else {
-        return `${s}초`;
-    }
-}
-
 // === 지도 생성 ===
 const MAP_STYLE =
     "https://api.maptiler.com/maps/streets-v2/style.json?key=2HioygjPVFKopzhBEhM3";
@@ -106,15 +112,31 @@ map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-
 const spdEl = document.getElementById("spd");
 const brgEl = document.getElementById("brg");
 
-// 길안내 chip 동적으로 추가
-(function setupNavChip() {
+// HUD chip들 추가
+(function setupHudChips() {
     const hud = document.querySelector(".hud");
     if (!hud) return;
+
+    // 다음 턴 안내
     navChip = document.createElement("div");
     navChip.className = "chip";
     navChip.id = "nav";
     navChip.textContent = "경로 없음";
     hud.appendChild(navChip);
+
+    // 남은 거리
+    distChip = document.createElement("div");
+    distChip.className = "chip";
+    distChip.id = "dist";
+    distChip.textContent = "남은 거리 없음";
+    hud.appendChild(distChip);
+
+    // 남은 시간
+    etaChip = document.createElement("div");
+    etaChip.className = "chip";
+    etaChip.id = "eta";
+    etaChip.textContent = "남은 시간 없음";
+    hud.appendChild(etaChip);
 })();
 
 // 위치/북쪽 고정/경로안내 버튼
@@ -145,7 +167,7 @@ function mkBtn(label) {
 }
 const btnLocate = mkBtn("📍 현위치");
 const btnNorth = mkBtn("N↑ 북쪽고정");
-const btnGuide = mkBtn("▶ 경로안내");
+const btnGuide = mkBtn("⏹ 경로안내"); // 기본 ON 상태
 ctl.append(btnLocate, btnNorth, btnGuide);
 document.body.appendChild(ctl);
 
@@ -184,7 +206,6 @@ map.addControl(geolocate, "top-right");
 map.on("load", () => {
     map.resize();
 });
-
 window.addEventListener("orientationchange", () => map.resize());
 window.addEventListener("resize", () => map.resize());
 
@@ -202,11 +223,65 @@ const geoOpts = {
     timeout: 30000,
 };
 
-function updateGuidanceForPosition(center) {
-    if (!guidanceActive || !routeSteps.length || !navChip) return;
+// routeLineCoords 기준으로 남은 거리(m) 계산
+function computeRemainingDistance(center) {
+    if (!routeLineCoords.length) return 0;
 
     const [lng, lat] = center;
+    let nearestIdx = 0;
+    let nearestDist = Infinity;
 
+    // 가장 가까운 polyline 점 찾기
+    for (let i = 0; i < routeLineCoords.length; i++) {
+        const [rlng, rlat] = routeLineCoords[i];
+        const d = haversineMeters(lat, lng, rlat, rlng);
+        if (d < nearestDist) {
+            nearestDist = d;
+            nearestIdx = i;
+        }
+    }
+
+    // 그 지점부터 끝까지 거리 합산
+    let remain = 0;
+    for (let i = nearestIdx; i < routeLineCoords.length - 1; i++) {
+        const [lng1, lat1] = routeLineCoords[i];
+        const [lng2, lat2] = routeLineCoords[i + 1];
+        remain += haversineMeters(lat1, lng1, lat2, lng2);
+    }
+    return remain;
+}
+
+function updateGuidanceForPosition(center) {
+    if (!guidanceActive) return;
+
+    // --- 남은 거리/시간 ---
+    if (totalDistanceM > 0 && totalTimeSec > 0 && (etaChip || distChip)) {
+        const remainingM = computeRemainingDistance(center);
+        const ratio = Math.max(
+            0,
+            Math.min(1, remainingM / totalDistanceM)
+        );
+        const remainingSec = totalTimeSec * ratio;
+
+        if (distChip) {
+            let distLabel;
+            if (remainingM >= 1000) {
+                distLabel = `남은 ${(remainingM / 1000).toFixed(1)}km`;
+            } else {
+                distLabel = `남은 ${Math.round(remainingM)}m`;
+            }
+            distChip.textContent = distLabel;
+        }
+
+        if (etaChip) {
+            etaChip.textContent = `남은 ${formatTime(Math.round(remainingSec))}`;
+        }
+    }
+
+    // --- 다음 턴 안내 ---
+    if (!routeSteps.length || !navChip) return;
+
+    const [lng, lat] = center;
     let bestIdx = currentStepIndex;
     let bestDist = Infinity;
 
@@ -280,17 +355,31 @@ function drawTmapRoute(tmapData) {
 
     routeLineCoords = [];
     routeSteps = [];
+    totalDistanceM = 0;
+    totalTimeSec = 0;
     currentStepIndex = 0;
+
     if (navChip) navChip.textContent = "경로 안내 준비중";
+    if (distChip) distChip.textContent = "남은 거리 계산중";
+    if (etaChip) etaChip.textContent = "남은 시간 계산중";
 
     if (!tmapData || !Array.isArray(tmapData.features)) {
         console.warn("Tmap data has no features");
         return;
     }
 
+    let summarySet = false;
+
     for (const f of tmapData.features) {
         const geom = f.geometry;
         const prop = f.properties || {};
+
+        // 전체 요약 (첫 Feature에 totalDistance/totalTime 있는 경우)
+        if (!summarySet && typeof prop.totalDistance === "number") {
+            totalDistanceM = prop.totalDistance;
+            totalTimeSec = prop.totalTime ?? 0;
+            summarySet = true;
+        }
 
         if (geom && geom.type === "LineString" && Array.isArray(geom.coordinates)) {
             for (const c of geom.coordinates) {
@@ -315,7 +404,11 @@ function drawTmapRoute(tmapData) {
         "Tmap route line points:",
         routeLineCoords.length,
         "steps:",
-        routeSteps.length
+        routeSteps.length,
+        "totalDistance(m):",
+        totalDistanceM,
+        "totalTime(sec):",
+        totalTimeSec
     );
 
     if (!routeLineCoords.length) {
@@ -359,8 +452,13 @@ function drawTmapRoute(tmapData) {
     map.fitBounds(bounds, { padding: 80, duration: 800 });
 
     if (navChip) navChip.textContent = "경로 안내 시작";
+    if (distChip) distChip.textContent = "남은 거리 계산중";
+    if (etaChip && totalTimeSec > 0) {
+        etaChip.textContent = `총 예상 ${formatTime(totalTimeSec)}`;
+    }
+
     guidanceActive = true;
-    btnGuide.textContent = "⏹ 경로중지";
+    btnGuide.textContent = "⏹ 경로안내";
 }
 
 // Tmap 경로 API 호출
@@ -373,7 +471,7 @@ async function requestTmapRoute(startLng, startLat, endLng, endLat) {
             ey: String(endLat),
         });
 
-        console.log("call /tmap-route with:", params.toString());
+        console.log("call /.netlify/functions/tmap-route with:", params.toString());
 
         const res = await fetch(
             "/.netlify/functions/tmap-route?" + params.toString()
@@ -388,22 +486,6 @@ async function requestTmapRoute(startLng, startLat, endLng, endLat) {
 
         const data = await res.json();
         drawTmapRoute(data);
-
-        if (data.features && data.features.length > 0) {
-            const prop = data.features[0].properties || {};
-            console.log(
-                "Tmap totalDistance(m):",
-                prop.totalDistance,
-                "totalTime(sec):",
-                prop.totalSec
-            );
-            console.log("예상 소요 시간:", formatTime(prop.totalTime));
-        }
-
-        if (etaChip && prop.totalTime) {
-            etaChip.textContent = "예상 " + formatTime(prop.totalTime);
-        }
-
     } catch (e) {
         console.error("tmap-route fetch error:", e);
         if (navChip) navChip.textContent = "경로 오류";
@@ -411,19 +493,29 @@ async function requestTmapRoute(startLng, startLat, endLng, endLat) {
     }
 }
 
-let etaChip = null;
+// === C. 카메라/속도 구조 (데이터 연결 시 사용) ===
 
-(function setupEtaChip() {
-    const hud = document.querySelector(".hud");
-    if (!hud) return;
+// cameraList: [{ lng, lat, type, limitSpeed }, ...]
+function renderCameras(cameraList) {
+    // 기존 마커 제거
+    cameraMarkers.forEach((m) => m.remove());
+    cameraMarkers = [];
 
-    etaChip = document.createElement("div");
-    etaChip.className = "chip";
-    etaChip.id = "eta";
-    etaChip.textContent = "ETA 없음"; // 기본값
-    hud.appendChild(etaChip);
-})();
+    if (!Array.isArray(cameraList)) return;
 
+    cameraList.forEach((cam) => {
+        const el = document.createElement("div");
+        el.style.cssText =
+            "width:10px;height:10px;border-radius:50%;background:#ff4444;box-shadow:0 0 8px #ff4444;";
+        const m = new maplibregl.Marker({ element: el })
+            .setLngLat([cam.lng, cam.lat])
+            .addTo(map);
+        cameraMarkers.push(m);
+    });
+}
+
+// TODO 예시:
+// fetch("/cameras.json").then(r => r.json()).then(list => renderCameras(list));
 
 // === 제스처 정책 ===
 function applyGesturePolicy() {
@@ -441,6 +533,11 @@ function applyGesturePolicy() {
 }
 applyGesturePolicy();
 
+btnNorth.onclick = () => {
+    northUp = !northUp;
+    btnNorth.textContent = northUp ? "N↑ 북쪽고정" : "🚗 진행방향";
+    applyGesturePolicy();
+};
 
 btnLocate.onclick = () => {
     followGps = true;
@@ -471,7 +568,7 @@ btnLocate.onclick = () => {
 // ▶ 경로안내 버튼 토글
 btnGuide.onclick = () => {
     guidanceActive = !guidanceActive;
-    btnGuide.textContent = guidanceActive ? "⏹ 경로중지" : "▶ 경로안내";
+    btnGuide.textContent = guidanceActive ? "⏹ 경로안내" : "▶ 경로안내";
     if (navChip && !guidanceActive) {
         navChip.textContent = "경로 안내 일시중지";
     }
