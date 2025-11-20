@@ -316,15 +316,15 @@ const onPos = (pos) => {
         const easeOpts = {
             center,
             bearing: northUp ? (heading ?? map.getBearing()) : 0,
-            // duration: 600,
+            duration: 600,
         };
 
-        if (simActive || !userInteracting) easeOpts.pitch = 60;
-        
-        if (!userInteracting) easeOpts.pitch = 60;
-        map.easeTo({easeOpts,duration: 0,});
-    }
+        if (simActive || !userInteracting) {
+            easeOpts.pitch = 60;
+        }
 
+        map.easeTo(easeOpts);
+    }
     // 길 안내 갱신
     updateGuidanceForPosition(center);
 };
@@ -557,15 +557,12 @@ btnLocate.onclick = () => {
     followGps = true;
     userInteracting = false;
 
-    destCoord = [lng, lat];
-
     const locateAndFollow = (center) => {
         lastFix = center;
         map.easeTo({
             center: lastFix,
-            duration: 600,
+            duration: 0,
             zoom: Math.max(16, map.getZoom()),
-            // 'moveend' 이벤트는 easeTo가 끝날 때 발생
         });
     };
 
