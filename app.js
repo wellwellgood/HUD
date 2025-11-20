@@ -316,10 +316,13 @@ const onPos = (pos) => {
         const easeOpts = {
             center,
             bearing: northUp ? (heading ?? map.getBearing()) : 0,
-            duration: 600,
+            // duration: 600,
         };
+
+        if (simActive || !userInteracting) easeOpts.pitch = 60;
+        
         if (!userInteracting) easeOpts.pitch = 60;
-        map.easeTo(easeOpts);
+        map.easeTo({easeOpts,duration: 0,});
     }
 
     // 길 안내 갱신
@@ -580,13 +583,10 @@ btnLocate.onclick = () => {
 };
 
 // map.on('moveend') 핸들러 수정/추가:
-// 사용자가 지도를 손으로 조작하지 않은 경우 (idleTimer가 만료된 경우),
-// 또는 '📍 현위치' 버튼을 누른 경우에 followGps = true; 를 설정합니다.
 map.on("moveend", () => {
     if (idleTimer) clearTimeout(idleTimer);
     idleTimer = setTimeout(() => {
         userInteracting = false;
-        // 1.5초 후 사용자 조작이 없으면 GPS 팔로우 모드를 다시 활성화
         followGps = true; // <-- 이 부분이 중요
     }, 1500);
 });
@@ -720,7 +720,7 @@ function smoothSimulate() {
     const [lng2, lat2] = routeLineCoords[simIndex + 1];
 
     // 0~1 사이 보간값
-    simProgress += 0.02; // 0.02 = 약 50fps로 1초에 다음 좌표 도착
+    simProgress += 0.04; // 0.02 = 약 50fps로 1초에 다음 좌표 도착
 
     if (simProgress >= 1) {
         simProgress = 0;
