@@ -675,19 +675,54 @@ ctl.append(btnSim);
 let simTimer = null;
 let simIndex = 0;
 let simActive = false;
+let simFrame = null;
+let simProgress = 0;
+
 
 btnSim.onclick = () => {
-    if (!simActive) {
-        // 시작
-        simActive = true;
-        simIndex = 0;
-        btnSim.textContent = "⏹ 모의중지";
+    simActive = !simActive;
 
-        simTimer = setInterval(simulateGpsMove, 500);
+    if (simActive) {
+        btnSim.textContent = "⏹ 모의중지";
+        simIndex = 0;
+        simProgress = 0;
+        simFrame = requestAnimationFrame(smoothSimulate);
     } else {
-        // 정지
-        simActive = false;
         btnSim.textContent = "🧪 모의주행";
-        clearInterval(simTimer);
+        cancelAnimationFrame(simFrame);
     }
 };
+
+function smoothSimulate() {
+    if (!simActive || simIndex >= routeLineCoords.length - 1) {
+        cancelAnimationFrame(simFrame);
+        return;
+    }
+
+    const [lng1, lat1] = routeLineCoords[simIndex];
+    const [lng2, lat2] = routeLineCoords[simIndex + 1];
+
+    // 0~1 사이 보간값
+    simProgress += 0.02; // 0.02 = 약 50fps로 1초에 다음 좌표 도착
+
+    if (simProgress >= 1) {
+        simProgress = 0;
+        simIndex++;
+    }
+
+    const lng = lng1 + (lng2 - lng1) * simProgress;
+    const lat = lat1 + (lat2 - lat1) * simProgress;
+
+    const fakePos = {
+        coords: {
+            longitude: lng,
+            latitude: lat,
+            speed: 10,
+            heading: 0,
+        },
+    };
+
+    onPos(fakePos);
+
+    simFrame = requestAnimationFrame(smoothSimulate);
+}
