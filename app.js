@@ -5,6 +5,12 @@ let userInteracting = false; // 손으로 지도 조작 중인지
 let _idleTimer = null;
 let followGps = true;        // GPS 따라 자동 이동 여부
 
+// 위치 평활화용
+let positionHistory = [];    // 최근 N개 위치 저장
+const MAX_HISTORY = 5;       // 평활화에 사용할 샘플 수
+const MAX_SPEED_MPS = 50;    // 최대 허용 속도 (m/s) - 약 180km/h
+const MIN_ACCURACY = 50;     // 최소 정확도 (미터) - 이보다 부정확하면 무시
+
 // 경로/길안내 상태
 let routeLineCoords = [];    // 전체 경로 polyline 좌표들 [ [lng,lat], ... ]
 let routeSteps = [];         // 안내용 포인트 배열 [{ lng, lat, turnType, description }]
@@ -219,7 +225,7 @@ const marker = new maplibregl.Marker({ element: markerEl })
 
 const geoOpts = {
     enableHighAccuracy: true,
-    maximumAge: 5000,
+    maximumAge: 2000,
     timeout: 30000,
 };
 
@@ -546,7 +552,7 @@ btnLocate.onclick = () => {
     if (lastFix) {
         map.easeTo({
             center: lastFix,
-            duration: 600,
+            duration: 800,
             zoom: Math.max(16, map.getZoom()),
         });
     } else {
@@ -560,7 +566,7 @@ btnLocate.onclick = () => {
                 });
             },
             console.warn,
-            { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 2000 }
         );
     }
 };
