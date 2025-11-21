@@ -1,0 +1,17 @@
+# Netlify 설정 파일
+
+[build]
+  functions = "netlify/functions"
+
+# Functions 설정
+[functions]
+  # 함수 타임아웃 (초)
+  node_bundler = "esbuild"
+
+# CORS 헤더 추가 (Functions에도 적용)
+[[headers]]
+  for = "/.netlify/functions/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Headers = "Content-Type, X-Requested-With"
+    Access-Control-Allow-Methods = "GET, POST, OPTIONS"
