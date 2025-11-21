@@ -407,7 +407,11 @@ function simulateGpsMove() {
 
     simIndex++;
 }
-
+const geoOpts = {
+    enableHighAccuracy: true, // 높은 정확도 요구
+    timeout: 15000,           // 15초 내에 응답이 없으면 에러
+    maximumAge: 5000,         // 5초 이내의 캐시된 위치 허용
+};
 const onErr = (e) => {
     console.warn("geo error", e.code, e.message);
     if (spdEl) spdEl.textContent = "위치권한 거부/실패";
