@@ -710,53 +710,69 @@ async function doSearch() {
         }
 
         const data = await res.json();
+        console.log("geocode result:", data);
 
-        // Naver geocode: addresses 배열 사용
+        let lng = null;
+        let lat = null;
+
+        // 1) 네이버 지오코딩 형식: { addresses: [ { x, y, ... } ] }
         if (data.addresses && data.addresses.length > 0) {
-            const { x, y } = data.addresses[0]; // x: 경도, y: 위도
-            const lng = Number(x);
-            const lat = Number(y);
-
-            destCoord = [lng, lat];
-
-            followGps = false;
-            userInteracting = true;
-
-            map.easeTo({
-                center: [lng, lat],
-                zoom: 16,
-                duration: 800,
-            });
-
-            const startRoute = () => {
-                if (lastFix) {
-                    requestTmapRoute(lastFix[0], lastFix[1], lng, lat);
-                } else if (navigator.geolocation) {
-                    navigator.geolocation.getCurrentPosition(
-                        (p) => {
-                            lastFix = [p.coords.longitude, p.coords.latitude];
-                            requestTmapRoute(lastFix[0], lastFix[1], lng, lat);
-                        },
-                        (err) => {
-                            console.warn("경로 시작 위치 가져오기 실패", err);
-                            alert("현위치를 가져올 수 없어서 경로를 그릴 수 없습니다.");
-                        },
-                        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-                    );
-                } else {
-                    alert("이 브라우저에서는 위치 서비스를 지원하지 않습니다.");
-                }
-            };
-
-            startRoute();
-        } else {
-            alert("검색 결과 없음");
+            const addr = data.addresses[0];
+            lng = Number(addr.x);
+            lat = Number(addr.y);
         }
+        // 2) 카카오 로컬 검색 / 지오코딩 형식: { documents: [ { x, y, ... } ] }
+        else if (data.documents && data.documents.length > 0) {
+            const place = data.documents[0];
+            lng = Number(place.x);
+            lat = Number(place.y);
+        }
+
+        if (lng == null || lat == null || Number.isNaN(lng) || Number.isNaN(lat)) {
+            alert("검색 결과 없음");
+            return;
+        }
+
+        destCoord = [lng, lat];
+
+        // 검색 위치로 지도 이동 (프리뷰)
+        followGps = false;
+        userInteracting = true;
+
+        map.easeTo({
+            center: [lng, lat],
+            zoom: 16,
+            duration: 800,
+        });
+
+        // 경로 탐색 시작
+        const startRoute = () => {
+            if (lastFix) {
+                requestTmapRoute(lastFix[0], lastFix[1], lng, lat);
+            } else if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (p) => {
+                        lastFix = [p.coords.longitude, p.coords.latitude];
+                        requestTmapRoute(lastFix[0], lastFix[1], lng, lat);
+                    },
+                    (err) => {
+                        console.warn("경로 시작 위치 가져오기 실패", err);
+                        alert("현위치를 가져올 수 없어서 경로를 그릴 수 없습니다.");
+                    },
+                    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+                );
+            } else {
+                alert("이 브라우저에서는 위치 서비스를 지원하지 않습니다.");
+            }
+        };
+
+        startRoute();
     } catch (e) {
         console.error("geocode fetch error:", e);
         alert("검색 중 오류 발생");
     }
 }
+
 
 // 엔터 키로 검색
 qInput.addEventListener("keydown", (e) => {
