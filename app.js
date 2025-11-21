@@ -179,7 +179,7 @@ map.on("moveend", () => {
     }, 1500);
 });
 map.on("rotateend", () => {
-    if (!northUp && map.getBearing() !== 0) {
+    if (northUp && map.getBearing() !== 0) {
         map.easeTo({ bearing: 0, duration: 300 });
     }
 });
@@ -352,7 +352,7 @@ const onPos = (pos) => {
             bearing: northUp ? 0 : (heading ?? map.getBearing()),
 
             // 💡 수정: 모의주행 중이거나 사용자 조작이 없을 때 피치 60 고정
-            pitch: (simActive || !userInteracting) ? 60 : map.getPitch(),
+            pitch: (simActive || !userInteracting) ? 40 : map.getPitch(),
 
             // 내비 느낌 나게 최소 줌 보장
             zoom: Math.max(map.getZoom(), 16),
