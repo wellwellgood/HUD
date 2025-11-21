@@ -207,6 +207,7 @@ markerEl.style.cssText = `
     border-right: 8px solid transparent;
     border-bottom: 16px solid #0ff; /* 진행 방향 색상 */
     box-shadow: 0 0 8px #0ff;
+    border-radius: 100px;
     transform-origin: 50% 100%; /* 회전 중심을 아래쪽 끝으로 설정 */
     /* MapLibre가 자동으로 회전시킴 */
 `;
