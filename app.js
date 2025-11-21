@@ -152,6 +152,7 @@ function mkBtn(label) {
   `;
     return b;
 }
+
 const btnLocate = mkBtn("📍 현위치");
 const btnNorth = mkBtn("N↑ 북쪽고정");
 const btnGuide = mkBtn("⏹ 경로안내"); // 기본 ON
@@ -196,18 +197,23 @@ window.addEventListener("orientationchange", () => map.resize());
 window.addEventListener("resize", () => map.resize());
 
 // === GPS 팔로우 / 마커 ===
+// app.js, GPS 팔로우 / 마커 섹션 수정
 const markerEl = document.createElement("div");
-markerEl.style.cssText =
-    "width:16px;height:16px;border-radius:50%;background:#0ff;box-shadow:0 0 8px #0ff;";
-const marker = new maplibregl.Marker({ element: markerEl })
-    .setLngLat(map.getCenter())
-    .addTo(map);
-
-const geoOpts = {
-    enableHighAccuracy: true,
-    maximumAge: 5000,
-    timeout: 30000,
-};
+// ⚠️ 단순한 원 대신 삼각형/화살표 CSS 또는 SVG 사용
+markerEl.style.cssText = `
+    width: 0; 
+    height: 0; 
+    border-left: 8px solid transparent; /* 삼각형 모양 */
+    border-right: 8px solid transparent;
+    border-bottom: 16px solid #0ff; /* 진행 방향 색상 */
+    box-shadow: 0 0 8px #0ff;
+    transform-origin: 50% 100%; /* 회전 중심을 아래쪽 끝으로 설정 */
+    /* MapLibre가 자동으로 회전시킴 */
+`;
+const marker = new maplibregl.Marker({
+    element: markerEl,
+    anchor: 'bottom', // 마커의 '뾰족한' 부분이 정확히 좌표에 오도록 설정
+}).setLngLat(map.getCenter()).addTo(map);
 
 // polyline 기반 남은 거리(m)
 function computeRemainingDistance(center) {
@@ -239,6 +245,23 @@ function computeRemainingDistance(center) {
 
 // 위치 업데이트 시 HUD 갱신
 function updateGuidanceForPosition(center) {
+
+    if (guidanceActive && routeLineCoords.length) {
+        const { nearestDist } = computeRemainingDistance(center);
+        const DEPARTURE_THRESHOLD = 50; // 50m 이상 이탈 시 재탐색
+
+        if (nearestDist > DEPARTURE_THRESHOLD && destCoord) {
+            console.warn("경로 이탈 감지! 재탐색 시작.");
+            if (navChip) navChip.textContent = "경로 이탈! 재탐색 중...";
+
+            // 재탐색 시작 (현재 위치 -> 목적지)
+            requestTmapRoute(center[0], center[1], destCoord[0], destCoord[1]);
+
+            // 재탐색 중 무한 루프 방지를 위해 followGps를 잠시 끔
+            followGps = false;
+        }
+    }
+
     if (!guidanceActive) return;
     if (!routeLineCoords.length) return;
 
@@ -310,24 +333,38 @@ const onPos = (pos) => {
     // 마커 위치
     marker.setLngLat(center);
 
+    if (!northUp) {
+        marker.setRotation(heading ?? 0);
+    } else {
+        // 북쪽 고정 모드에서는 마커는 북쪽(0도)을 향하도록 설정
+        marker.setRotation(0);
+    }
+
     // HUD 업데이트
     if (spdEl) spdEl.textContent = `${toKmH(speed)} km/h`;
     if (brgEl) brgEl.textContent = `${Math.round(clampBearing(heading ?? 0))}°`;
 
     // GPS 따라가기 모드일 때만 카메라 자동 이동
-    if (followGps && !userInteracting) {
+    if (followGps) {
         const easeOpts = {
             center,
-            bearing: northUp ? (heading ?? map.getBearing()) : 0,
-            pitch: 60,
+            // 북쪽 고정 모드일 때와 아닐 때의 방위각 처리
+            bearing: northUp ? 0 : (heading ?? map.getBearing()),
+
+            // 💡 수정: 모의주행 중이거나 사용자 조작이 없을 때 피치 60 고정
+            pitch: (simActive || !userInteracting) ? 60 : map.getPitch(),
+
             // 내비 느낌 나게 최소 줌 보장
             zoom: Math.max(map.getZoom(), 16),
-            duration: 600,
+
+            // 💡 수정: 지도 늦음 현상 방지를 위해 duration을 0으로 설정
+            duration: 0,
         };
         map.easeTo(easeOpts);
-    }
 
-    // 길 안내 HUD (남은 거리/시간/다음 턴)
+        // 길 안내 HUD (남은 거리/시간/다음 턴)
+        updateGuidanceForPosition(center);
+    };
     updateGuidanceForPosition(center);
 };
 
@@ -386,6 +423,24 @@ const ROUTE_SOURCE_ID = "tmap-route-source";
 const ROUTE_LAYER_ID = "tmap-route-layer";
 
 function drawTmapRoute(tmapData) {
+
+    map.addLayer({
+        id: ROUTE_LAYER_ID,
+        type: "line",
+        source: ROUTE_SOURCE_ID,
+        layout: {
+            "line-cap": "round",
+            "line-join": "round",
+        },
+        paint: {
+            // 💡 수정: 경로선 두께 증가
+            "line-width": 8,
+            "line-opacity": 1,
+            // 💡 수정: 경로색을 더 잘 보이는 파란색으로 변경하거나 테두리 추가
+            "line-color": "#42a5f5", // 예시: 밝은 파란색
+        },
+    });
+
     console.log("Tmap route raw data:", tmapData);
 
     routeLineCoords = [];
