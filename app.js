@@ -357,8 +357,8 @@ const onPos = (pos) => {
             // 내비 느낌 나게 최소 줌 보장
             zoom: Math.max(map.getZoom(), 16),
 
-            // 💡 수정: 지도 늦음 현상 방지를 위해 duration을 0으로 설정
-            duration: 0,
+            // 💡 재수정: duration을 40ms로 설정하여 MapLibre의 자체 보간을 활용
+            duration: 40, // 👈 0ms 대신 짧은 시간 설정
         };
         map.easeTo(easeOpts);
 
@@ -816,22 +816,39 @@ function smoothSimulate() {
     const [lng2, lat2] = routeLineCoords[simIndex + 1];
 
     // 0~1 사이 보간값
-    simProgress += 0.04; // 0.02 = 약 50fps로 1초에 다음 좌표 도착
+    simProgress += 0.04;
 
     if (simProgress >= 1) {
         simProgress = 0;
         simIndex++;
+
+        // 💡 추가: 모의 주행 완료 처리 (경로 끝 도달 시)
+        if (simIndex >= routeLineCoords.length - 1) {
+            cancelAnimationFrame(simFrame);
+            simActive = false;
+            btnSim.textContent = "🧪 모의주행";
+            alert("모의 주행 완료!");
+            return;
+        }
     }
 
     const lng = lng1 + (lng2 - lng1) * simProgress;
     const lat = lat1 + (lat2 - lat1) * simProgress;
+
+    // 💡 수정: 현재 세그먼트의 진행 방향(Heading) 계산 로직 추가
+    // Math.atan2를 사용하여 두 지점 사이의 방위각을 계산한 후 MapLibre의 Bearing 각도로 변환합니다.
+    const angleRad = Math.atan2(lat2 - lat1, lng2 - lng1);
+    let heading = (angleRad * 180) / Math.PI;
+    heading = 90 - heading; // 좌표계 변환
+    heading = clampBearing(heading); // 0~360도 보정
+    // ----------------------------------------------------
 
     const fakePos = {
         coords: {
             longitude: lng,
             latitude: lat,
             speed: 10,
-            heading: 0,
+            heading: heading, // 👈 계산된 heading 값 사용
         },
     };
 
