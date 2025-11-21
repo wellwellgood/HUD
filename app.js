@@ -307,25 +307,27 @@ const onPos = (pos) => {
     const center = [longitude, latitude];
     lastFix = center;
 
+    // 마커 위치
     marker.setLngLat(center);
 
+    // HUD 업데이트
     if (spdEl) spdEl.textContent = `${toKmH(speed)} km/h`;
     if (brgEl) brgEl.textContent = `${Math.round(clampBearing(heading ?? 0))}°`;
 
-    if (followGps) {
+    // GPS 따라가기 모드일 때만 카메라 자동 이동
+    if (followGps && !userInteracting) {
         const easeOpts = {
             center,
             bearing: northUp ? (heading ?? map.getBearing()) : 0,
+            pitch: 60,
+            // 내비 느낌 나게 최소 줌 보장
+            zoom: Math.max(map.getZoom(), 16),
             duration: 600,
         };
-
-        if (simActive || !userInteracting) {
-            easeOpts.pitch = 60;
-        }
-
         map.easeTo(easeOpts);
     }
-    // 길 안내 갱신
+
+    // 길 안내 HUD (남은 거리/시간/다음 턴)
     updateGuidanceForPosition(center);
 };
 
@@ -591,9 +593,47 @@ map.on("moveend", () => {
 // 경로안내 버튼: 안내만 ON/OFF (경로는 그대로)
 btnGuide.onclick = () => {
     guidanceActive = !guidanceActive;
-    btnGuide.textContent = guidanceActive ? "⏹ 경로안내" : "▶ 경로안내";
-    if (!guidanceActive && navChip) {
-        navChip.textContent = "경로 안내 일시중지";
+
+    if (!guidanceActive) {
+        // 안내 끄기
+        btnGuide.textContent = "▶ 경로안내";
+        followGps = false; // 자동 따라가기 OFF
+        if (navChip) navChip.textContent = "경로 안내 일시중지";
+        return;
+    }
+
+    // 안내 켜기
+    btnGuide.textContent = "⏹ 경로안내";
+    followGps = true;       // GPS 따라가기 켬
+    userInteracting = false; // 사용자 제스처 상태 리셋
+
+    const activateNavView = (center) => {
+        if (!center) return;
+        lastFix = center;
+        map.easeTo({
+            center,
+            zoom: 17,      // 내비 뷰 줌 (원하면 16~18 사이로 취향대로)
+            pitch: 60,     // 살짝 기울여서 HUD 느낌
+            bearing: northUp ? 0 : map.getBearing(),
+            duration: 600,
+        });
+    };
+
+    if (lastFix) {
+        // 이미 GPS 한 번이라도 잡힌 상태면 그 위치 기준으로 내비뷰 전환
+        activateNavView(lastFix);
+    } else if (navigator.geolocation) {
+        // 아직 위치 못 잡았으면 한 번 요청해서 바로 내비뷰 전환
+        navigator.geolocation.getCurrentPosition(
+            (p) => {
+                activateNavView([p.coords.longitude, p.coords.latitude]);
+            },
+            (err) => {
+                console.warn("경로안내용 현재 위치 가져오기 실패:", err);
+                alert("현 위치를 가져올 수 없어 내비 뷰로 전환하지 못했습니다.");
+            },
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+        );
     }
 };
 
